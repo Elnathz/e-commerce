@@ -1,0 +1,1670 @@
+Private E-commerce  |  Hal. 1 dari 33 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+TECHNICAL DESIGN DOCUMENT 
+Private E-Commerce Web Application 
+  
+Versi 1.0  |  Arsitektur: Monolithic Modular   
+Laravel 12 (PHP 8.3)  +  Vue 3 + Inertia.js  +  MySQL 8  +  Redis  +  Docker  
+ 
+Backend Laravel 12 (PHP 8.3) + MySQL 8 + Redis  
+Frontend Vue 3 + Inertia.js + Tailwind CSS  
+Infrastruktur Docker Compose (VPS) 
+Payment Gateway Tripay API 
+Shipping API RajaOngkir (JNE / J&T Kargo) + Pengiriman Internal  
+Arsitektur Monolithic Modular 
+Versi Dokumen 1.0  
+  
+Private E-commerce  |  Hal. 2 dari 33 
+1. Gambaran Umum Sistem 
+1.1 Tentang Sistem Ini 
+Private Ecommerce adalah platform belanja online berbasis web yang dibangun khusus 
+untuk satu penjual (single-seller). Sistem ini hadir sebagai solusi mandiri agar penjual tidak 
+lagi bergantung pada platform pihak ketiga seperti Shopee, sehingga penjual memiliki 
+kendali penuh atas harga, data pelanggan, dan identitas tokonya sendiri.  
+Platform ini melayani dua jenis pengguna: admin yang mengelola keseluruhan sistem 
+termasuk produk, pesanan, dan pengiriman, serta pelanggan (customer) yang berbelanja. 
+Seluruh proses dari pencarian produk, pembelian, pembayaran, hingga pengiriman dan 
+pengembalian barang dikelola secara terpadu dalam satu sistem.  
+1.2 Pendekatan Arsitektur Sistem  
+Sistem dibangun menggunakan pendekatan Monolithic Modular, artinya seluruh fitur 
+berada dalam satu aplikasi yang sama, namun setiap fitur diorganisasi secara terpisah agar 
+mudah dikelola dan dikembangkan. Pendekatan ini dipilih karena lebih mudah di -deploy 
+pada satu server, lebih sederhana dalam pengembangan awal, namun tetap terstruktur rapi 
+untuk dikembangkan lebih lanjut di masa depan.  
+1.3 Struktur Fitur Sistem 
+Setiap fitur dikelompokkan ke dalam modul terpisah yang memiliki tanggung jawab jelas, 
+antara lain: Autentikasi, Produk, Keranjang, Checkout, Pembayaran, Pesanan, Pengiriman, 
+Pengembalian Barang, Ulasan, Analitik, Promosi, dan Notifikasi. Proses pemenuhan 
+pesanan dikelola secara terpusat ( single source fulfillment). Dukungan multi -gudang 
+direncanakan untuk fase selanjutnya. Struktur ini memudahkan tim pengembang untuk 
+bekerja pada satu fitur tanpa mengganggu fitur lainnya.  
+2. Daftar Kebutuhan Sistem 
+2.1 Functional Requirements 
+ID Modul Functional Requirement Prioritas 
+FR001 Akun & Akses Sistem menyediakan mekanisme pendaftaran akun, masuk, keluar, 
+serta pengelolaan profil untuk pembeli dan admin. 
+Must 
+FR002 Akun & Akses Sistem membatasi fitur berdasarkan peran pengguna: admin dan 
+pelanggan. 
+Must 
+FR003 Akun & Akses Sistem menjaga keamanan sesi login dengan pembatasan percobaan 
+masuk, waktu kedaluwarsa sesi, dan penyimpanan kata sandi secara 
+aman. 
+Must 
+FR004 Produk & 
+Katalog 
+Sistem memungkinkan admin untuk menambahkan, memperbarui, 
+dan menghapus produk beserta foto, harga, dan deskripsinya. 
+Must 
+FR005 Produk & 
+Katalog 
+Sistem menyediakan pengelolaan kategori produk agar produk lebih 
+mudah dikelompokkan dan dicari. 
+Must 
+FR006 Produk & 
+Katalog 
+Sistem mendukung variasi produk seperti ukuran dan warna, di mana 
+setiap variasi memiliki stok tersendiri. 
+Must 
+FR007 Pencegahan 
+Overselling 
+Sistem memeriksa ketersediaan stok saat checkout. Jika stok tidak 
+mencukupi, proses dibatalkan dan pelanggan diberitahu. 
+Must 
+Private E-commerce  |  Hal. 3 dari 33 
+FR008 Pencegahan 
+Overselling 
+Sistem menetapkan batas waktu pembayaran dan membatalkan 
+pesanan secara otomatis apabila tidak dibayar tepat waktu. Reservasi 
+stok yang sebelumnya diamankan saat checkout akan dilepas secara 
+otomatis ketika pesanan dibatalkan atau kedaluwarsa, sehingga stok 
+kembali tersedia bagi pelanggan lain. 
+Must 
+FR009 Pencegahan 
+Overselling 
+Sistem mengamankan stok (reservation) secara sementara pada saat 
+checkout, yaitu ketika order berstatus pending. Selama periode 
+reservation, stok tersebut tidak tersedia bagi pelanggan lain. Jika 
+pembayaran gagal atau kedaluwarsa, reservasi dilepas dan sto k 
+dikembalikan ke kondisi tersedia. 
+Must 
+FR010 Pencegahan 
+Overselling 
+Sistem mengonversi reservasi stok menjadi pengurangan permanen 
+hanya setelah pembayaran berhasil dikonfirmasi oleh Tripay. 
+Sebelum konfirmasi berhasil, stok dianggap sedang direservasi dan 
+tidak dapat dipesan oleh pelanggan lain. 
+Must 
+FR011 Keranjang & 
+Checkout 
+Sistem menyediakan keranjang belanja untuk menambah, mengubah 
+jumlah, dan menghapus produk sebelum membeli. 
+Must 
+FR012 Keranjang & 
+Checkout 
+Sistem menyediakan proses checkout yang mencakup pengisian 
+alamat, pemilihan jasa pengiriman, dan konfirmasi pesanan. 
+Must 
+FR013 Keranjang & 
+Checkout 
+Sistem mencatat keranjang belanja yang ditinggalkan tanpa 
+diselesaikan untuk kebutuhan analisis dan pengingat. 
+Want 
+FR014 Pembayaran & 
+Pesanan 
+Sistem mendukung berbagai metode pembayaran seperti transfer 
+bank, dompet digital, dan payment gateway. 
+Must 
+FR015 Pembayaran & 
+Pesanan 
+Sistem memverifikasi setiap notifikasi pembayaran yang masuk dan 
+memastikan tidak ada transaksi yang diproses lebih dari sekali. 
+Must 
+FR016 Pembayaran & 
+Pesanan 
+Sistem menetapkan batas waktu pembayaran dan membatalkan 
+pesanan secara otomatis apabila tidak dibayar tepat waktu. 
+Must 
+FR017 Pembayaran & 
+Pesanan 
+Sistem mengelola status pesanan secara lengkap dari awal hingga 
+selesai atau dibatalkan. 
+Must 
+FR018 Pembayaran & 
+Pesanan 
+Sistem memungkinkan pelanggan membatalkan pesanan selama 
+pesanan belum diproses. 
+Must 
+FR019 Pembayaran & 
+Pesanan 
+Sistem menyediakan mekanisme pengembalian dana sesuai 
+kebijakan yang berlaku. 
+Must 
+FR020 Pengiriman Sistem menentukan metode pengiriman yang sesuai berdasarkan 
+lokasi tujuan pelanggan. 
+Must 
+FR021 Pengiriman Sistem menggunakan tarif pengiriman internal untuk pesanan yang 
+dikirim ke dalam Kota Semarang. 
+Must 
+FR022 Pengiriman Sistem menggunakan layanan kurir eksternal (JNE, J&T, Kargo) 
+untuk pesanan di luar Kota Semarang. 
+Must 
+FR023 Pengiriman Sistem menampilkan estimasi waktu tiba berdasarkan layanan 
+pengiriman yang dipilih. 
+Want 
+FR024 Pengiriman Sistem memungkinkan admin memasukkan nomor resi dan 
+memperbarui status pengiriman. 
+Must 
+FR025 Pengiriman Sistem menyediakan fitur pelacakan status pengiriman yang dapat 
+diakses oleh pelanggan. 
+Want 
+FR026 Ulasan & 
+Interaksi 
+Sistem menyediakan fitur ulasan dan penilaian produk yang 
+diberikan pelanggan dan dapat dikelola oleh admin. 
+Must 
+Private E-commerce  |  Hal. 4 dari 33 
+FR027 Analitik & Data Sistem menampilkan ringkasan data penjualan, performa produk, dan 
+aktivitas transaksi di dashboard admin. 
+Must 
+FR028 Analitik & Data Sistem menyimpan data pelanggan dan riwayat transaksi sebagai 
+dasar analisis perilaku pengguna. 
+Must 
+FR029 Analitik & Data Sistem menyediakan metrik lanjutan seperti tingkat konversi dan 
+pelanggan yang kembali berbelanja. 
+Want 
+FR030 Marketing & 
+Promosi 
+Sistem menyediakan pengelolaan program promosi seperti diskon 
+dan voucher dengan aturan tertentu. 
+Want 
+FR031 Notifikasi Sistem mengirimkan pemberitahuan kepada pengguna terkait 
+aktivitas penting seperti status pesanan, pembayaran, dan 
+pengiriman. 
+Must 
+FR032 Notifikasi Sistem mendukung pengiriman notifikasi melalui berbagai saluran: 
+email dan dashboard. 
+Want 
+2.2 Non-Functional Requirements 
+Non-functional requirements mendeskripsikan bagaimana sistem harus berperilaku dari 
+sisi performa, keamanan, dan keandalan — bukan hanya apa yang dilakukannya.  
+ 
+ID Category Non-Functional Requirement 
+NFR001 Performance Sistem mampu merespons permintaan pengguna dalam waktu maksimal 3 detik 
+pada kondisi penggunaan normal 
+NFR002 Concurrency Sistem mampu menangani beberapa transaksi yang terjadi bersamaan tanpa 
+mengorbankan keakuratan data 
+NFR003 Security Sistem melindungi data sensitif pengguna dengan mekanisme enkripsi yang 
+memadai 
+NFR004 Security Sistem mencegah akses tidak sah melalui mekanisme autentikasi dan kontrol 
+hak akses 
+NFR005 Security Sistem memiliki perlindungan terhadap serangan umum seperti percobaan 
+login berulang dan injeksi data berbahaya 
+NFR006 Usability Antarmuka sistem mudah dipahami dan digunakan tanpa memerlukan pelatihan 
+khusus 
+NFR007 Usability Navigasi sistem konsisten dan mendukung pengalaman pengguna yang efisien 
+NFR008 Availability Sistem tersedia untuk digunakan minimal 99% dari waktu operasional 
+NFR009 Reliability Sistem mampu memulihkan data apabila terjadi kegagalan sistem 
+NFR010 Scalability Sistem mampu menangani peningkatan jumlah pengguna dan transaksi tanpa 
+penurunan performa yang berarti 
+NFR011 Modularity Sistem dirancang dengan struktur modul yang terpisah agar mudah 
+dikembangkan dan diperbaiki 
+NFR012 Maintainability Dokumentasi sistem tersedia untuk mendukung proses pemeliharaan dan 
+pengembangan lanjutan 
+3. Uraian Modul Sistem 
+3.1 Daftar Modul dan Perannya  
+Private E-commerce  |  Hal. 5 dari 33 
+Sistem dibagi ke dalam 16 modul fungsional. Setiap modul memiliki tanggung jawab yang 
+jelas dan terpisah. Ketergantungan antar modul diatur secara terstruktur agar perubahan 
+pada satu modul tidak mengganggu modul lainnya.  
+Modul FR Terkait Tanggung Jawab Bergantung Pada 
+Authentication FR001 –FR003 Mengelola pendaftaran, login, dan logout 
+pengguna. Memastikan setiap pengguna 
+hanya dapat mengakses fitur sesuai 
+perannya. Melindungi akun dari percobaan 
+login yang mencurigakan. 
+—  
+User Profile FR001, FR031 Memungkinkan pelanggan dan admin 
+mengelola data pribadi dan daftar alamat 
+pengiriman mereka. 
+Authentication 
+Product & 
+Catalog 
+FR004–FR006 Mengelola seluruh data produk termasuk 
+foto, harga, kategori, variasi, dan stok 
+produk. Menyediakan fitur pencarian dan 
+pengelompokan produk untuk kemudahan 
+belanja. 
+—  
+Overselling 
+Prevention 
+FR007–FR010 Mengamankan stok sementara saat 
+pelanggan sedang dalam proses pembayaran 
+agar stok tidak terjual ganda. Secara otomatis 
+melepas pengamanan apabila pembayaran 
+gagal atau melewati batas waktu. 
+Product & Catalog 
+Shopping Cart FR011–FR013 Menyediakan keranjang belanja yang 
+tersimpan secara permanen saat pengguna 
+login. Mendeteksi keranjang yang 
+ditinggalkan untuk kebutuhan pengingat 
+otomatis. 
+Product & Catalog 
+Checkout FR011–FR012 Mengorkestrasi proses pemesanan dari 
+keranjang hingga pembayaran: pemilihan 
+alamat, kalkulasi ongkos kirim, penerapan 
+voucher, dan konfirmasi pesanan. 
+Shopping Cart, Shipping 
+Payment FR014–FR016 Mengelola integrasi dengan penyedia 
+pembayaran Tripay. Memverifikasi setiap 
+notifikasi pembayaran yang masuk dan 
+memastikan setiap transaksi diproses tepat 
+satu kali. 
+Order 
+Order FR017–FR019 Mengelola seluruh siklus hidup pesanan dari 
+diterima hingga selesai, termasuk 
+pembatalan dan pengembalian dana. 
+Payment 
+Shipping FR020–FR025 Menentukan dan menghitung ongkos kirim 
+berdasarkan lokasi tujuan. Menampilkan 
+estimasi waktu tiba dan memungkinkan 
+pencatatan nomor resi oleh admin. 
+Order 
+Return FR019 Mengelola proses pengembalian barang dari 
+pelanggan hingga pengembalian dana, 
+termasuk verifikasi bukti foto dan konfirmasi 
+penerimaan barang. 
+Order, Payment 
+Product 
+Review 
+FR026 Memungkinkan pelanggan memberikan 
+penilaian dan ulasan setelah pesanan selesai. 
+Admin dapat mengelola tampilan ulasan. 
+Order 
+Private E-commerce  |  Hal. 6 dari 33 
+Analytics FR027–FR029 Menyediakan ringkasan performa penjualan 
+dan perilaku pelanggan untuk membantu 
+admin membuat keputusan bisnis yang lebih 
+baik. 
+Order 
+Promotion FR030 Mengelola kode voucher dan program 
+promosi lainnya. 
+Product & Catalog, 
+Order 
+Notification FR031–FR032 Mengirimkan pemberitahuan kepada 
+pengguna melalui email dan dashboard saat 
+terjadi aktivitas penting seperti konfirmasi 
+pesanan atau status pengiriman. 
+Order, Payment 
+4. Database Schema 
+4.1 Definisi Tabel 
+Tabel: users 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap pengguna, dibuat 
+otomatis oleh sistem. 
+name VARCHAR(255) NOT NULL Nama lengkap pengguna. 
+email VARCHAR(255) NOT NULL, 
+Unique 
+Alamat email yang digunakan untuk login. 
+password VARCHAR(255) NOT NULL Kata sandi tersimpan dalam format terenkripsi, tidak 
+dapat dibaca langsung. 
+role ENUM NOT NULL Peran pengguna: admin, customer. 
+is_active BOOLEAN Default: true Status aktif/nonaktif akun tanpa menghapus data. 
+email_verified_at TIMESTAMP Nullable Waktu verifikasi email; kosong berarti belum 
+diverifikasi. 
+last_login_at TIMESTAMP Nullable Waktu terakhir pengguna berhasil masuk ke sistem. 
+last_login_ip VARCHAR(45) Nullable Alamat jaringan saat terakhir login, untuk deteksi 
+aktivitas mencurigakan. 
+created_at TIMESTAMP NOT NULL Waktu akun dibuat. 
+updated_at TIMESTAMP NOT NULL Waktu terakhir data diperbarui. 
+Tabel: user_addresses 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap alamat. 
+user_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan alamat ini ke data pengguna 
+pemiliknya. 
+label VARCHAR(100) NOT NULL Nama singkat alamat, misalnya: Rumah atau Kantor. 
+recipient_name VARCHAR(255) NOT NULL Nama penerima paket di alamat ini. 
+phone VARCHAR(20) NOT NULL Nomor telepon penerima. 
+Private E-commerce  |  Hal. 7 dari 33 
+province VARCHAR(100) NOT NULL Nama provinsi tujuan. 
+city VARCHAR(100) NOT NULL Nama kota atau kabupaten tujuan. 
+city_id VARCHAR(20) NOT NULL Kode kota yang digunakan untuk kalkulasi ongkos 
+kirim. 
+district VARCHAR(100) Nullable Nama kecamatan. 
+postal_code VARCHAR(10) Nullable Kode pos. 
+address_detail TEXT NOT NULL Alamat lengkap beserta nomor rumah dan 
+keterangan tambahan. 
+is_default BOOLEAN Default: false Menandai alamat ini sebagai alamat utama saat 
+checkout. 
+Tabel: categories 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap kategori. 
+parent_id BIGINT 
+UNSIGNED 
+Nullable Menghubungkan ke kategori induk; kosong berarti 
+kategori utama. 
+name VARCHAR(255) NOT NULL Nama kategori. 
+slug VARCHAR(255) Unique Versi URL dari nama kategori untuk keperluan 
+alamat halaman web. 
+image_path VARCHAR(500) Nullable Lokasi file gambar kategori. 
+sort_order INT Default: 0 Urutan tampil kategori di halaman. 
+is_active BOOLEAN Default: true Status aktif/nonaktif kategori. 
+Tabel: products 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap produk. 
+category_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan produk ke kategorinya. 
+name VARCHAR(500) NOT NULL Nama produk. 
+slug VARCHAR(500) Unique Versi URL dari nama produk untuk halaman detail. 
+description LONGTEXT Nullable Deskripsi lengkap produk dalam format teks kaya. 
+base_price DECIMAL(15,2) NOT NULL Harga dasar produk sebelum mempertimbangkan 
+variasi. 
+weight_gram INT UNSIGNED NOT NULL Berat produk dalam gram, digunakan untuk 
+menghitung ongkos kirim. 
+is_active BOOLEAN Default: true Status tampil produk di toko. 
+deleted_at TIMESTAMP Nullable Waktu produk dihapus; jika terisi, produk tidak 
+ditampilkan namun data tetap tersimpan. 
+created_at TIMESTAMP NOT NULL Waktu produk pertama kali dibuat. 
+Private E-commerce  |  Hal. 8 dari 33 
+updated_at TIMESTAMP NOT NULL Waktu terakhir data produk diperbarui. 
+Tabel: product_variants 
+Tabel ini menyimpan variasi produk sekaligus informasi stok. Sistem menggunakan dua 
+kolom untuk mengelola stok: kolom stock menyimpan jumlah stok total, dan kolom 
+reserved_stock menyimpan jumlah stok yang sedang direservasi (ditahan) untuk pesanan 
+dengan status pending. Stok yang benar-benar tersedia untuk dibeli adalah: stock dikurangi 
+reserved_stock. Constraint database memas tikan reserved_stock tidak pernah melebihi 
+stock. 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap variasi produk. 
+product_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan variasi ke produk induknya. 
+sku VARCHAR(100) Unique Kode unik produk untuk keperluan identifikasi stok 
+(Stock Keeping Unit). 
+name VARCHAR(255) NOT NULL Nama variasi, misalnya: Merah / XL. 
+price DECIMAL(15,2) NOT NULL Harga spesifik untuk variasi ini; dapat berbeda dari 
+harga dasar produk. 
+stock INT UNSIGNED NOT NULL, 
+min: 0 
+Jumlah stok total yang dimiliki (termasuk yang 
+sedang direservasi). Stok tersedia = stock - 
+reserved_stock. 
+reserved_stock INT UNSIGNED NOT NULL, 
+Default: 0 
+Jumlah stok yang sedang direservasi untuk pesanan 
+berstatus pending. Constraint: reserved_stock <= 
+stock. Stok tersedia untuk pelanggan baru = stock - 
+reserved_stock. Nilai ini bertambah saat checkout 
+dan berkurang saat pembayaran berhasil (finalisasi) 
+atau saat reservasi dilepas (cancel/expired). 
+weight_gram INT UNSIGNED Nullable Berat khusus untuk variasi ini; jika kosong 
+menggunakan berat produk induk. 
+is_active BOOLEAN Default: true Status aktif variasi ini. 
+Tabel: product_images 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap gambar. 
+product_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan gambar ke produknya. 
+image_path VARCHAR(500) NOT NULL Lokasi penyimpanan file gambar di server. 
+is_primary BOOLEAN Default: false Menandai gambar ini sebagai foto utama produk. 
+sort_order INT Default: 0 Urutan tampil dalam galeri foto produk. 
+Tabel: carts 
+Kolom Tipe Data Sifat Keterangan 
+Private E-commerce  |  Hal. 9 dari 33 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap keranjang. 
+user_id BIGINT 
+UNSIGNED 
+Nullable Menghubungkan ke pengguna pemilik keranjang; 
+kosong untuk tamu. 
+session_id VARCHAR(100) Nullable Pengenal sesi untuk tamu yang belum login. Saat 
+tamu login, item dari keranjang sesi ini digabung ke 
+keranjang pengguna (merge): item yang sama 
+ditambah jumlahnya, item baru ditambahkan. 
+Keranjang sesi tamu kemudian dihapus. 
+abandoned_at TIMESTAMP Nullable Waktu keranjang terakhir aktif tanpa diselesaikan; 
+diisi otomatis oleh sistem. 
+created_at TIMESTAMP NOT NULL Waktu keranjang dibuat. 
+updated_at TIMESTAMP NOT NULL Waktu terakhir keranjang diperbarui. 
+Tabel: cart_items 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap item dalam keranjang. 
+cart_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan item ke keranjang induknya. 
+product_variant_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan item ke variasi produk yang 
+dipilih. 
+quantity INT 
+UNSIGNED 
+NOT NULL, 
+min: 1 
+Jumlah unit produk yang ditambahkan ke keranjang. 
+unit_price_snapshot DECIMAL(15,2) NOT NULL Harga produk pada saat item ditambahkan ke 
+keranjang; disimpan agar tidak berubah meski harga 
+produk berubah di kemudian hari. 
+created_at TIMESTAMP NOT NULL Waktu item ditambahkan ke keranjang. 
+Tabel: orders 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT 
+NULL, 
+Unique 
+Nomor pengenal unik setiap pesanan. 
+order_number VARCHAR(50) Unique, 
+NOT 
+NULL 
+Nomor pesanan dalam format yang mudah dibaca, contoh: 
+ORD-20241215-00001. 
+user_id BIGINT 
+UNSIGNED 
+NOT 
+NULL 
+Menghubungkan pesanan ke pelanggan yang memesan. 
+status ENUM NOT 
+NULL 
+Status pesanan: pending, paid, processing, shipped, 
+completed, cancelled, refunded. 
+subtotal DECIMAL(15,2) NOT 
+NULL 
+Total harga produk sebelum ongkos kirim dan diskon. 
+shipping_cost DECIMAL(15,2) NOT 
+NULL 
+Ongkos kirim yang dikenakan untuk pesanan ini. 
+Private E-commerce  |  Hal. 10 dari 33 
+discount_amount DECIMAL(15,2) Default: 0 Nilai diskon atau voucher yang diterapkan. 
+total_amount DECIMAL(15,2) NOT 
+NULL 
+Jumlah akhir yang harus dibayar pelanggan. 
+shipping_addres
+s_snapshot 
+JSON NOT 
+NULL 
+Salinan alamat pengiriman saat pesanan dibuat. Format JSON 
+baku:{"recipient_name":"","phone":"","province":"","city":"",
+"address_detail":"","postal_code":""}. Disimpan agar riwayat 
+tidak berubah. 
+notes TEXT Nullable Catatan tambahan dari pelanggan. 
+cancelled_at TIMESTAMP Nullable Waktu pesanan dibatalkan. 
+cancelled_reason VARCHAR(500
+) 
+Nullable Alasan pembatalan pesanan. 
+created_at TIMESTAMP NOT 
+NULL 
+Waktu pesanan dibuat. 
+updated_at TIMESTAMP NOT 
+NULL 
+Waktu terakhir data pesanan diperbarui. 
+courier VARCHAR(100
+) 
+Nullable Kode atau nama kurir yang digunakan untuk pengiriman, 
+misal: jne, jnt, internal. 
+tracking_number VARCHAR(200
+) 
+Nullable Nomor resi pengiriman yang diisi admin setelah barang 
+dikirim. 
+shipped_at TIMESTAMP Nullable Waktu barang dikirimkan oleh admin. 
+delivered_at TIMESTAMP Nullable Waktu barang dikonfirmasi telah diterima oleh pelanggan. 
+Tabel: order_items 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap item dalam 
+pesanan. 
+order_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan item ke pesanan induknya. 
+product_variant_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan item ke variasi produk yang 
+dipesan. 
+product_name_snapshot VARCHAR(500) NOT NULL Nama produk saat pesanan dibuat; disimpan agar 
+riwayat tidak berubah. 
+variant_name_snapshot VARCHAR(255) NOT NULL Nama variasi produk saat pesanan dibuat. 
+quantity INT UNSIGNED NOT NULL Jumlah unit yang dipesan. 
+unit_price DECIMAL(15,2) NOT NULL Harga per unit saat pesanan dibuat. 
+weight_gram INT UNSIGNED NOT NULL Berat per unit saat pesanan dibuat, digunakan 
+untuk rekap pengiriman. 
+subtotal DECIMAL(15,2) NOT NULL Total harga item ini (jumlah dikali harga satuan). 
+Tabel: payments 
+Kolom Tipe Data Sifat Keterangan 
+Private E-commerce  |  Hal. 11 dari 33 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap data pembayaran. 
+order_id BIGINT 
+UNSIGNED 
+NOT NULL Menghubungkan pembayaran ke pesanan terkait. 
+Satu pesanan dapat memiliki lebih dari satu data 
+pembayaran (retry). 
+tripay_reference VARCHAR(100) Unique, NOT 
+NULL 
+Nomor referensi yang diberikan oleh penyedia 
+pembayaran Tripay. 
+tripay_merchant_ref VARCHAR(100) Unique, NOT 
+NULL 
+Nomor referensi internal sistem; digunakan untuk 
+memastikan tidak ada proses ganda. 
+payment_method VARCHAR(50) NOT NULL Metode pembayaran yang dipilih, misalnya: BRI 
+Virtual Account, OVO, QRIS. 
+amount DECIMAL(15,2) NOT NULL Jumlah yang harus dibayarkan. 
+status ENUM NOT NULL Status pembayaran: pending, paid, failed, expired, 
+refunded. 
+paid_at TIMESTAMP Nullable Waktu pembayaran dikonfirmasi berhasil. 
+expired_at TIMESTAMP Nullable Batas akhir waktu pembayaran; pesanan dibatalkan 
+otomatis setelah waktu ini. 
+webhook_payload JSON Nullable Ringkasan notifikasi dari Tripay untuk keperluan 
+penelusuran masalah. Hanya menyimpan field 
+penting (status, reference, amount); payload 
+lengkap dicatat di log file untuk mencegah database 
+membengkak. 
+created_at TIMESTAMP NOT NULL Waktu data pembayaran dibuat. 
+updated_at TIMESTAMP NOT NULL Waktu terakhir data diperbarui. 
+Tabel: returns 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap pengajuan 
+pengembalian. 
+return_number VARCHAR(50) Unique, NOT 
+NULL 
+Nomor pengajuan pengembalian dalam format 
+yang mudah dibaca. 
+order_id BIGINT 
+UNSIGNED 
+NOT NULL Pesanan yang menjadi dasar pengajuan 
+pengembalian. 
+user_id BIGINT 
+UNSIGNED 
+NOT NULL Pelanggan yang mengajukan pengembalian. 
+status ENUM NOT NULL Status pengajuan dalam tahapan prosesnya. 
+reason TEXT NOT NULL Alasan pelanggan mengajukan pengembalian 
+barang. 
+is_partial BOOLEAN Default: false Menandai apakah hanya sebagian item yang 
+dikembalikan. 
+refund_amount DECIMAL(15,2) Nullable Jumlah yang akan dikembalikan; diisi admin 
+saat menyetujui pengajuan. 
+refund_method VARCHAR(50) Nullable Cara pengembalian dana: ke metode asal, 
+transfer bank, atau kredit toko. 
+Private E-commerce  |  Hal. 12 dari 33 
+admin_notes TEXT Nullable Catatan admin saat menyetujui atau menolak 
+pengajuan. 
+return_tracking_number VARCHAR(200) Nullable Nomor resi pengiriman balik dari pelanggan. 
+return_courier VARCHAR(100) Nullable Nama kurir yang digunakan pelanggan untuk 
+mengirim balik. 
+return_received_at TIMESTAMP Nullable Waktu barang diterima kembali. 
+refund_processed_at TIMESTAMP Nullable Waktu pengembalian dana diproses. 
+expires_at TIMESTAMP Nullable Batas akhir waktu pengajuan pengembalian. 
+created_at TIMESTAMP NOT NULL Waktu pengajuan dibuat. 
+updated_at TIMESTAMP NOT NULL Waktu terakhir data diperbarui. 
+evidence_image_1 VARCHAR(500) NOT NULL Path foto bukti utama yang wajib diunggah saat 
+pengajuan pengembalian. 
+evidence_image_2 VARCHAR(500) Nullable Path foto bukti kedua (opsional, maks 3 foto 
+total). 
+evidence_image_3 VARCHAR(500) Nullable Path foto bukti ketiga (opsional). 
+Tabel: reviews 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap ulasan. 
+order_item_id BIGINT 
+UNSIGNED 
+Unique, NOT 
+NULL 
+Item pesanan yang diulas; setiap item hanya boleh 
+diulas satu kali. 
+user_id BIGINT 
+UNSIGNED 
+NOT NULL Pelanggan yang memberikan ulasan. 
+product_id BIGINT 
+UNSIGNED 
+NOT NULL Produk yang diulas. 
+rating TINYINT 
+UNSIGNED 
+NOT NULL, 
+1–5 
+Nilai penilaian dari 1 (sangat buruk) hingga 5 (sangat 
+baik). 
+comment TEXT Nullable Teks ulasan dari pelanggan. 
+is_published BOOLEAN Default: true Status tampil ulasan; admin dapat menyembunyikan 
+ulasan yang tidak sesuai. 
+created_at TIMESTAMP NOT NULL Waktu ulasan ditulis. 
+Tabel: promotions 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap promosi. 
+code VARCHAR(100) Unique, 
+Nullable 
+Kode voucher yang dimasukkan pelanggan; kosong 
+untuk promosi otomatis tanpa kode. 
+type ENUM NOT NULL Jenis promosi: potongan persentase, potongan 
+nominal, atau gratis ongkir. 
+Private E-commerce  |  Hal. 13 dari 33 
+value DECIMAL(15,2) NOT NULL Besaran potongan yang diberikan. 
+min_purchase DECIMAL(15,2) Default: 0 Minimum belanja yang diperlukan untuk 
+menggunakan promosi ini. 
+max_usage INT UNSIGNED Nullable Batas maksimum penggunaan; kosong berarti tidak 
+terbatas. 
+used_count INT UNSIGNED Default: 0 Jumlah penggunaan promosi hingga saat ini. 
+valid_from TIMESTAMP Nullable Tanggal mulai berlakunya promosi. 
+valid_until TIMESTAMP Nullable Tanggal berakhirnya promosi. 
+is_active BOOLEAN Default: true Status aktif promosi. 
+Tabel: notifications 
+Kolom Tipe Data Sifat Keterangan 
+id BIGINT 
+UNSIGNED 
+NOT NULL, 
+Unique 
+Nomor pengenal unik setiap notifikasi. 
+user_id BIGINT 
+UNSIGNED 
+NOT NULL Pengguna yang menerima notifikasi ini. 
+type VARCHAR(100) NOT NULL Jenis kejadian yang memicu notifikasi, misalnya: 
+pesanan_baru atau pembayaran_berhasil. 
+title VARCHAR(255) NOT NULL Judul singkat notifikasi yang tampil di dashboard. 
+body TEXT NOT NULL Isi pesan notifikasi secara lengkap. 
+data JSON Nullable Informasi tambahan yang terhubung dengan 
+notifikasi, misalnya nomor pesanan. 
+read_at TIMESTAMP Nullable Waktu notifikasi dibaca; kosong berarti belum 
+dibaca. 
+created_at TIMESTAMP NOT NULL Waktu notifikasi dikirim. 
+4.2 Hubungan Antar Tabel 
+Tabel-tabel dalam sistem saling terhubung untuk memastikan integritas data. Berikut 
+ringkasan hubungan utama: 
+Dari Tabel Relasi Ke Tabel Penjelasan 
+users 1 : N user_addresses Satu pengguna dapat memiliki lebih dari satu 
+alamat pengiriman. 
+users 1 : N orders Semua riwayat pesanan milik seorang pengguna. 
+products 1 : N product_variants Setiap produk memiliki satu atau lebih variasi. 
+product_variants 1 : 1 (stok terintegrasi) Stok langsung disimpan pada tabel 
+product_variants tanpa tabel inventaris terpisah. 
+orders 1 : N order_items Setiap pesanan terdiri dari satu atau lebih item. 
+orders 1 : N payments Satu pesanan dapat memiliki lebih dari satu data 
+pembayaran (1:N) untuk mendukung retry 
+pembayaran. 
+Private E-commerce  |  Hal. 14 dari 33 
+orders 1 : 1 order_fulfillments Data pengiriman disimpan langsung di tabel 
+orders. Tabel order_fulfillments telah dihapus dan 
+digabungkan ke tabel orders. 
+order_items 1 : 1 reviews Setiap item yang selesai hanya dapat diulas satu 
+kali. 
+orders 1 : N returns Satu pesanan dapat memiliki satu pengajuan 
+pengembalian. 
+returns 1 : N returns (kolom 
+evidence_image) 
+Bukti foto (maks 3) disimpan langsung sebagai 
+kolom evidence_image_1/2/3 di tabel returns. 
+Tabel return_items dihapus. 
+returns 1 : N returns (kolom 
+evidence_image) 
+Tabel return_evidences dihapus. Bukti disimpan 
+langsung di returns. Relasi orders 1:N payments 
+untuk mendukung retry pembayaran. 
+ 
+4.3 Definisi Nilai ENUM 
+Berikut adalah daftar lengkap nilai ENUM yang digunakan di setiap tabel. Nilai ini 
+bersifat baku dan harus digunakan secara konsisten oleh seluruh tim pengembang.  
+users.role 
+Nilai ENUM Keterangan 
+admin Pengelola sistem dengan akses penuh ke seluruh fitur backend. 
+customer Pelanggan yang dapat berbelanja dan mengelola pesanannya. 
+orders.status 
+Nilai ENUM Keterangan 
+pending Pesanan baru dibuat, menunggu pembayaran dari pelanggan. 
+paid Pembayaran telah dikonfirmasi berhasil oleh Tripay. 
+processing Admin sedang memproses pesanan, barang sedang disiapkan. 
+shipped Barang telah dikirimkan, nomor resi sudah diinput admin. 
+completed Pesanan selesai, barang telah diterima pelanggan. 
+cancelled Pesanan dibatalkan baik oleh pelanggan, admin, maupun sistem. 
+refunded Dana dikembalikan setelah proses return selesai diverifikasi. 
+payments.status 
+Nilai ENUM Keterangan 
+pending Tagihan sudah dibuat, menunggu pembayaran dari pelanggan. 
+paid Pembayaran berhasil dikonfirmasi oleh Tripay. 
+failed Pembayaran gagal diproses. 
+expired Batas waktu pembayaran habis, tagihan hangus. 
+Private E-commerce  |  Hal. 15 dari 33 
+refunded Dana dikembalikan ke pelanggan setelah proses refund selesai. 
+returns.status 
+Nilai ENUM Keterangan 
+submitted Pengajuan pengembalian baru masuk dari pelanggan. 
+approved Admin telah menyetujui pengajuan pengembalian. 
+rejected Admin menolak pengajuan dengan alasan yang dicatat. 
+returned Pelanggan telah mengirimkan barang kembali ke penjual. 
+received Admin telah menerima dan memeriksa kondisi barang. 
+refund_processed Admin telah memproses pengembalian dana. 
+completed Proses pengembalian selesai sepenuhnya. 
+expired Pelanggan tidak mengirim barang dalam batas waktu yang ditentukan. 
+5. Alur Logika Bisnis 
+5.1 Alur Autentikasi Pengguna 
+Sistem menggunakan mekanisme sesi berbasis server yang disimpan di Redis untuk 
+menjamin kecepatan dan keamanan. Setiap sesi memiliki batas waktu aktif selama 120 
+menit. 
+a. Pengguna mengakses halaman masuk dan memasukkan alamat email beserta kata 
+sandi. 
+b. Sistem memeriksa apakah akun tersebut masih dalam kondisi diblokir akibat terlalu 
+banyak percobaan masuk yang gagal. Jika sudah 5 kali gagal dalam satu menit, sistem 
+memblokir akses selama 15 menit.  
+c. Jika data benar, sistem membuat sesi baru, mencatat waktu dan lokasi jaringan login 
+terakhir, lalu mengarahkan pengguna ke halaman sesuai perannya.  
+d. Setiap halaman yang dilindungi selalu memeriksa apakah sesi masih aktif dan apakah 
+peran pengguna sesuai dengan hak akses yang diperlukan.  
+e. Saat pengguna keluar, sesi dihapus sepenuhnya dari sistem dan tidak dapat digunakan 
+kembali. 
+5.2 Alur Keranjang dan Checkout 
+Keranjang belanja disimpan secara permanen di database sehingga tidak hilang meskipun 
+pengguna menutup browser. Tamu yang belum login juga dapat berbelanja; keranjangnya 
+akan digabungkan secara otomatis saat mereka login.  
+a. Pelanggan menambahkan produk ke keranjang. Sistem memeriksa ketersediaan 
+stok sebelum mengizinkan penambahan. Jika stok tidak mencukupi, penambahan 
+ditolak disertai pesan informatif.  
+b. Di halaman checkout, pelanggan memilih alamat pengiriman dari daftar alamat 
+yang tersimpan atau menambahkan alamat baru.  
+c. Sistem menghitung ongkos kirim secara otomatis berdasarkan kota tujuan dan berat 
+total produk. 
+Private E-commerce  |  Hal. 16 dari 33 
+d. Saat pelanggan mengkonfirmasi pesanan, sistem membuat catatan pesanan dengan 
+status pending dan langsung mengamankan stok (reservation) untuk seluruh item 
+yang dipesan. Stok yang direservasi tidak tersedia bagi pelanggan lain selama 
+proses pembayaran berlangsung. 
+e. Setelah pelanggan mengkonfirmasi pesanan, sistem secara atomik membuat catatan 
+pesanan, melakukan reservasi stok untuk semua item, dan menghubungi penyedia 
+pembayaran untuk membuat tagihan. Jika satu langkah gagal, semua perubahan — 
+termasuk reservasi stok  — dibatalkan sepenuhnya. 
+f. Pelanggan diarahkan ke halaman pembayaran yang disediakan oleh Tripay.  
+5.3 Alur Pembayaran 
+Sistem menerima konfirmasi pembayaran secara otomatis dari Tripay melalui notifikasi 
+yang dikirim ke sistem. Setiap notifikasi diverifikasi keasliannya sebelum diproses.  
+a. Tripay mengirimkan notifikasi ke sistem setelah ada perubahan status pembayaran.  
+b. Sistem memeriksa tanda tangan digital yang disertakan dalam notifikasi untuk 
+memastikan pesan benar-benar berasal dari Tripay dan tidak dimodifikasi di tengah 
+jalan. 
+c. Sistem memeriksa apakah notifikasi ini sudah pernah diproses sebelumnya. Jika 
+sudah, sistem mengabaikan notifikasi tanpa memproses ulang untuk mencegah efek 
+ganda. 
+d. Jika pembayaran berhasil , reservasi stok dikonversi menjadi pengurangan 
+permanen, status pesanan diperbarui menjadi paid, dan notifikasi dikirimkan 
+kepada pelanggan dan admin. 
+e. Jika pembayaran gagal atau kedaluwarsa: reservasi stok dilepas secara otomatis 
+sehingga stok kembali tersedia, pesanan dibatalkan, dan pelanggan mendapat 
+pemberitahuan beserta opsi untuk memesan ulang.  
+f. Sistem secara berkala memeriksa pesanan yang mendekati batas waktu pembayaran 
+dan membatalkannya secara otomatis jika terlewat.  
+5.4 Alur Pengiriman 
+Pilihan pengiriman ditentukan secara otomatis berdasarkan kota tujuan. Terdapat dua jalur 
+utama: pengiriman internal untuk kota Semarang dan pengiriman via kurir eksternal untuk 
+kota lainnya. Seluruh pesanan dipenuhi dari satu sumber terpusat ( single source 
+fulfillment). 
+a. Sistem mendeteksi apakah kota tujuan adalah Kota Semarang. Jika ya, sistem 
+menggunakan layanan pengiriman internal dengan tarif yang telah dikonfigurasi 
+oleh admin, tanpa menghubungi layanan kurir eksternal.  
+b. Untuk tujuan di luar Kota Semarang, sistem menghubungi penyedia data ongkos 
+kirim (RajaOngkir) untuk mendapatkan pilihan layanan JNE, J&T, atau Kargo 
+beserta tarif dan perkiraan waktu tiba.  
+c. Hasil ongkos kirim disimpan sementara selama 30 menit agar tidak perlu 
+mengambil data yang sama berulang kali saat ada beberapa pelanggan yang 
+memeriksa tujuan yang sama. 
+d. Jika layanan pengiriman eksternal tidak dapat dihubungi, sistem menggunakan data 
+estimasi cadangan yang telah disiapkan sebelumnya dan menginformasikan 
+pelanggan bahwa ongkos kirim yang ditampilkan bersifat perkiraan.  
+Private E-commerce  |  Hal. 17 dari 33 
+e. Pesanan yang dikirim sebelum pukul 14.00 pada hari kerja akan diproses dan 
+dikirim pada hari yang sama. Pesanan setelah pukul 14.00 akan diproses pada hari 
+kerja berikutnya. 
+5.5 Alur Pencegahan Overselling 
+Overselling terjadi ketika stok yang sama terjual kepada dua pelanggan sekaligus akibat 
+pemrosesan yang terjadi hampir bersamaan. Sistem memiliki tiga lapisan perlindungan 
+untuk mencegah hal ini. 
+a. Saat checkout dikonfirmasi, sistem melakukan reservasi stok menggunakan 
+database transaction dengan atomic update: UPDATE product_variants SET 
+reserved_stock = reserved_stock + quantity WHERE id = ? AND (stock - 
+reserved_stock) >= quantity. Jika stok tersedia tidak mencukupi, seluruh checkout 
+dibatalkan dan pelanggan diberitahu item mana yang tidak tersedia.  
+b. Selama periode reservation (status pesanan: pending), stok yang direservasi 
+dianggap tidak tersedia bagi pelanggan lain. Sistem memeriksa ketersediaan stok 
+dengan formula: stok_tersedia = stock - reserved_stock. Jika stok_tersedia < 
+quantity yang diminta, checkout ditolak.  
+c. Saat pembayaran berhasil dikonfirmasi, reservasi dikonversi menjadi pengurangan 
+permanen: reserved_stock dikurangi dan stock dikurangi secara bersamaan dalam 
+satu transaksi database. Ini memastikan source of truth selalu konsisten.  
+d. Jika pembayaran gagal, kedaluwarsa, atau dibatalkan, sistem melepas reservasi stok 
+secara otomatis: reserved_stock dikurangi kembali sejumlah quantity yang 
+sebelumnya direservasi. Proses ini dilakukan oleh scheduler yang berjalan setiap 15 
+menit untuk menangkap pesanan yang melewati batas waktu expired_at.  
+6. Rancangan API 
+6.1 Authentication 
+Method Endpoint Akses Fungsi 
+POST /login Guest Masuk ke sistem menggunakan email dan kata 
+sandi. 
+POST /logout Customer Keluar dari sistem dan mengakhiri sesi aktif. 
+POST /register Guest Mendaftar sebagai pelanggan baru. 
+GET /email/verify/{id}/{hash} Customer Verifikasi alamat email setelah pendaftaran. 
+POST /forgot-password Guest Meminta tautan reset kata sandi dikirimkan ke 
+email. 
+POST /reset-password Guest Mengatur ulang kata sandi menggunakan tautan 
+yang diterima. 
+6.2 Product & Catalog 
+Method Endpoint Akses Fungsi 
+GET /products Public Menampilkan daftar produk aktif dengan 
+fitur filter dan halaman. 
+GET /products/{slug} Public Menampilkan detail produk beserta 
+variasi, stok, dan ulasan. 
+Private E-commerce  |  Hal. 18 dari 33 
+GET /categories Public Menampilkan daftar kategori beserta 
+hirarkinya. 
+POST /admin/products Admin Membuat produk baru beserta variasi dan 
+foto. 
+PUT /admin/products/{id} Admin Memperbarui data produk yang sudah 
+ada. 
+DELETE /admin/products/{id} Admin Menghapus produk (data tetap tersimpan 
+untuk riwayat). 
+POST /admin/products/{id}/variants Admin Menambahkan variasi baru pada produk. 
+PUT /admin/products/{id}/variants/{vid} Admin Memperbarui data variasi produk. 
+PUT /admin/products/{id}/variants/{vid}/stock Admin Mengubah jumlah stok variasi produk. 
+POST /admin/categories Admin Membuat kategori produk baru. 
+PUT /admin/categories/{id} Admin Memperbarui data kategori. 
+6.3 Cart & Checkout 
+Method Endpoint Akses Fungsi 
+GET /cart Customer Menampilkan isi keranjang belanja aktif. 
+POST /cart/items Customer Menambahkan produk ke keranjang. 
+PATCH /cart/items/{id} Customer Mengubah jumlah item dalam keranjang. 
+DELETE /cart/items/{id} Customer Menghapus item dari keranjang. 
+GET /checkout Customer Membuka halaman checkout. 
+POST /api/shipping/cost Customer Menghitung ongkos kirim berdasarkan alamat 
+dan berat. 
+POST /api/checkout/confirm Customer Membuat pesanan dengan status pending dan 
+menghubungi Tripay untuk membuat tagihan 
+pembayaran. 
+POST /api/orders/{id}/cancel Customer Membatalkan pesanan yang masih berstatus 
+pending sebelum pembayaran dilakukan. 
+POST /checkout Customer Menyelesaikan checkout dan membuat 
+pesanan resmi. 
+6.4 Order & Payment 
+Method Endpoint Akses Fungsi 
+GET /orders Customer Melihat riwayat pesanan dengan filter status. 
+GET /orders/{order_number} Customer Melihat detail pesanan beserta informasi 
+pengiriman. 
+POST /orders/{order_number}/cancel Customer Membatalkan pesanan yang masih dalam status 
+menunggu. 
+GET /admin/orders Admin Melihat semua pesanan masuk beserta 
+statusnya. 
+Private E-commerce  |  Hal. 19 dari 33 
+PATCH /admin/orders/{id}/status Admin Memperbarui status pesanan melalui alur yang 
+telah ditentukan. 
+POST /admin/orders/{id}/tracking Admin Memasukkan nomor resi pengiriman. 
+POST /api/payments/webhook System Menerima notifikasi status pembayaran dari 
+Tripay. 
+GET /payments/{order_number}/check Customer Memeriksa status pembayaran terkini. 
+POST /admin/orders/{id}/refund Admin Memulai proses pengembalian dana. 
+6.5 Return & Refund 
+Method Endpoint Akses Fungsi 
+POST /api/orders/{id}/return Customer Mengajukan pengembalian barang beserta bukti 
+foto atau video. 
+GET /orders/{id}/returns Customer Melihat status pengajuan pengembalian milik 
+pelanggan. 
+GET /admin/returns Admin Melihat semua pengajuan pengembalian beserta 
+statusnya. 
+PATCH /admin/returns/{id}/approve Admin Menyetujui pengajuan dan menetapkan jumlah 
+pengembalian dana. 
+PATCH /admin/returns/{id}/reject Admin Menolak pengajuan dengan alasan yang jelas. 
+PATCH /admin/returns/{id}/received Admin Mengkonfirmasi bahwa barang telah diterima 
+kembali. 
+PATCH /admin/returns/{id}/refund Admin Memproses pengembalian dana ke pelanggan. 
+6.6 Review, Analitik, Promosi & Notifikasi 
+Method Endpoint Akses Fungsi 
+POST /reviews Customer Menulis ulasan untuk produk yang sudah 
+diterima. 
+PATCH /admin/reviews/{id}/toggle Admin Menampilkan atau menyembunyikan ulasan 
+produk. 
+GET /admin/analytics/dashboard Admin Melihat ringkasan data penjualan dan performa 
+produk. 
+GET /admin/analytics/metrics Admin Melihat metrik lanjutan seperti tingkat 
+konversi. 
+GET /admin/analytics/export Admin Mengunduh data pelanggan dalam format 
+spreadsheet. 
+POST /api/promotions/validate Customer Memeriksa apakah kode voucher valid saat 
+checkout. 
+POST /admin/promotions Admin Membuat program promosi baru. 
+GET /notifications Customer Melihat daftar notifikasi yang diterima. 
+POST /notifications/read-all Customer Menandai semua notifikasi sebagai sudah 
+dibaca. 
+Private E-commerce  |  Hal. 20 dari 33 
+7. Struktur Halaman Antarmuka  
+7.1 Halaman untuk Pelanggan 
+Halaman / URL Pengguna Fungsi 
+/ Public Halaman utama toko: produk unggulan, kategori pilihan, dan banner 
+promosi. 
+/products Public Katalog lengkap produk dengan fitur filter kategori, rentang harga, 
+dan pengurutan. 
+/products/{slug} Public Detail produk: galeri foto, deskripsi, pemilihan variasi, stok tersedia, 
+dan ulasan pembeli. 
+/categories/{slug} Public Daftar produk dalam kategori tertentu. 
+/login Guest Halaman masuk ke sistem. 
+/register Guest Halaman pendaftaran akun pelanggan baru. 
+/cart Customer Keranjang belanja: daftar item, ubah jumlah, kode voucher, dan 
+total harga. 
+/checkout Customer Proses pemesanan: pilih alamat, pilih kurir, ringkasan pesanan, dan 
+konfirmasi pembayaran. 
+/orders Customer Riwayat semua pesanan dengan filter berdasarkan status. 
+/orders/{order_number} Customer Detail pesanan lengkap: item, status pengiriman, nomor resi, dan 
+tombol ajukan pengembalian atau beri ulasan. 
+/orders/{id}/return Customer Formulir pengajuan pengembalian barang: pilih item, isi alasan, 
+unggah bukti foto atau video. 
+/profile Customer Pengelolaan profil, ganti kata sandi, dan kelola daftar alamat. 
+/notifications Customer Pusat notifikasi: semua pemberitahuan penting dengan status sudah 
+atau belum dibaca. 
+7.2 Halaman untuk Admin 
+Halaman / URL Pengguna Fungsi 
+/admin/dashboard Admin Ringkasan performa: total penjualan, pesanan baru, produk aktif, 
+pendapatan, dan peringatan stok menipis. 
+/admin/products Admin Kelola semua produk: aktifkan, nonaktifkan, atau hapus. 
+/admin/products/create Admin Formulir pembuatan produk baru beserta variasi, foto, harga, dan 
+stok. 
+/admin/products/{id}/edit Admin Edit data produk dan variasi yang sudah ada. 
+/admin/categories Admin Buat dan kelola kategori produk beserta hierarkinya. 
+/admin/orders Admin Semua pesanan masuk: filter status, aksi update status, dan input 
+nomor resi. 
+/admin/orders/{id} Admin Detail pesanan: informasi pelanggan, item, alamat, status 
+pembayaran, dan input nomor resi. 
+/admin/payments Admin Pantau status transaksi pembayaran. 
+Private E-commerce  |  Hal. 21 dari 33 
+/admin/returns Admin Proses pengajuan pengembalian: setujui, tolak, konfirmasi 
+penerimaan barang, dan proses refund. 
+/admin/reviews Admin Kelola dan moderasi ulasan produk dari seluruh pelanggan. 
+/admin/analytics Admin Analitik lanjutan: pola pembelian, produk terlaris, dan ekspor data 
+pelanggan. 
+/admin/promotions Admin Kelola voucher dan program diskon. 
+/admin/users Admin Kelola seluruh pengguna: aktifkan atau nonaktifkan akun. 
+/admin/audit-logs Admin Riwayat lengkap semua aktivitas sistem untuk keperluan audit. 
+8. Integrasi Layanan Eksternal  
+8.1 Tripay - Penyedia Pembayaran 
+Tripay digunakan sebagai satu-satunya penyedia layanan pembayaran. Sistem 
+berkomunikasi dua arah dengan Tripay, mengirimkan permintaan pembayaran saat 
+pelanggan checkout, dan menerima konfirmasi status pembayaran melalui notifikasi 
+otomatis. 
+Cara Membuat 
+Tagihan 
+Sistem mengirimkan detail pesanan ke Tripay saat pelanggan konfirmasi checkout. 
+Tripay membalas dengan halaman pembayaran yang dapat diakses pelanggan. 
+Metode 
+Pembayaran 
+Mendukung berbagai metode: Virtual Account bank (BRI, Mandiri, BNI), dompet 
+digital (OVO, GoPay), dan QRIS. 
+Konfirmasi 
+Otomatis 
+Setelah pelanggan membayar, Tripay mengirimkan notifikasi ke sistem secara otomatis. 
+Sistem memverifikasi keaslian notifikasi sebelum memproses perubahan status pesanan. 
+Keamanan 
+Notifikasi 
+Setiap notifikasi yang masuk diperiksa menggunakan tanda tangan digital untuk 
+memastikan informasi benar-benar berasal dari Tripay. Notifikasi palsu ditolak dan 
+dicatat. 
+Pencegahan Proses 
+Ganda 
+Sistem menyimpan referensi unik setiap transaksi. Notifikasi yang sama tidak akan 
+diproses dua kali meskipun dikirim berulang oleh Tripay. 
+Batas Waktu Bayar Setiap tagihan memiliki batas waktu yang ditentukan Tripay. Sistem secara otomatis 
+membatalkan pesanan yang melewati batas waktu ini. 
+Penanganan 
+Kegagalan 
+Jika komunikasi dengan Tripay gagal saat membuat tagihan, pesanan tidak jadi dibuat 
+dan stok tidak berkurang. Admin dapat melakukan pemeriksaan status pembayaran 
+secara manual jika diperlukan. 
+Konfigurasi Semua kunci rahasia Tripay disimpan di file konfigurasi server yang tidak dapat diakses 
+publik. 
+8.2 RajaOngkir - Kalkulasi Ongkos Kirim 
+RajaOngkir digunakan untuk mendapatkan informasi ongkos kirim dan estimasi waktu 
+tiba dari layanan kurir JNE dan J&T untuk pengiriman ke luar Kota Semarang.  
+Cara Penggunaan Saat pelanggan memilih alamat di halaman checkout, sistem mengirimkan informasi 
+kota asal, kota tujuan, dan berat total ke RajaOngkir. RajaOngkir membalas dengan 
+pilihan layanan beserta tarif dan perkiraan hari tiba. 
+Pengiriman Internal 
+Semarang 
+Untuk tujuan dalam Kota Semarang, sistem tidak menghubungi RajaOngkir. Tarif 
+dihitung langsung berdasarkan konfigurasi pengiriman internal yang telah ditetapkan 
+admin. 
+Private E-commerce  |  Hal. 22 dari 33 
+Penyimpanan 
+Sementara 
+Hasil ongkos kirim disimpan selama 30 menit. Jika ada pelanggan lain yang memeriksa 
+tujuan yang sama dengan berat serupa, data tersimpan digunakan tanpa perlu mengambil 
+ulang. 
+Strategi Cadangan Jika RajaOngkir tidak dapat dihubungi, sistem menggunakan data tarif estimasi yang 
+telah disiapkan sebelumnya. Pelanggan diberitahu bahwa tarif bersifat estimasi, dan 
+admin mendapat pemberitahuan. 
+Perhitungan Berat Berat total dihitung dari jumlah berat semua item yang dipesan. Berat minimum yang 
+berlaku mengikuti ketentuan minimum kurir. 
+Data Kota Daftar kode kota dari RajaOngkir disimpan di sistem selama 24 jam untuk menghindari 
+permintaan berulang. 
+8.3 Layanan Email dan Notifikasi 
+Email dikirim menggunakan layanan SMTP (Mailgun, SES, atau SMTP sendiri). Semua 
+pengiriman email dilakukan di latar belakang agar tidak memperlambat respons sistem 
+saat pengguna melakukan aksi.  
+Pemicu Kejadian Penerima Isi Pemberitahuan 
+Pesanan berhasil dibuat Pelanggan dan 
+Admin 
+Nomor pesanan, daftar item, total harga, dan 
+tautan halaman pembayaran. 
+Pembayaran berhasil Pelanggan Konfirmasi pembayaran dan perkiraan pengiriman. 
+Pesanan dikirim Pelanggan Nomor resi, nama kurir, dan informasi pelacakan. 
+Pembayaran kedaluwarsa Pelanggan Pemberitahuan pembayaran hangus dan opsi 
+memesan ulang. 
+Keranjang ditinggalkan Pelanggan Pengingat item di keranjang beserta tautan kembali 
+ke toko. 
+Pengembalian disetujui Pelanggan Konfirmasi pengajuan diterima dan instruksi 
+mengirim barang kembali. 
+Refund diproses Pelanggan Konfirmasi dana dikembalikan dan perkiraan 
+masuk ke rekening. 
+8.4 Notifikasi WhatsApp (Opsional) 
+Fitur notifikasi melalui WhatsApp dapat diaktifkan secara opsional menggunakan penyedia 
+gateway WhatsApp pihak ketiga. Fitur ini dapat dinyalakan atau dimatikan tanpa 
+mengubah fitur notifikasi lainnya karena sistem notifikasi dirancang secara modular.  
+9. Infrastruktur Docker 
+Komponen Gambar / Versi Fungsi dalam Sistem 
+nginx nginx:alpine Gerbang masuk sistem: meneruskan permintaan dari 
+pengguna ke aplikasi, menangani koneksi aman (SSL) 
+php PHP 8.3-FPM (build khusus) Server aplikasi Laravel utama yang memproses semua logika 
+bisnis 
+queue-worker PHP 8.3-FPM (build khusus) Memproses tugas latar belakang seperti pengiriman email, 
+notifikasi, dan ekspor data 
+scheduler PHP 8.3-FPM (build khusus) Menjalankan tugas terjadwal secara otomatis seperti 
+pembatalan pesanan kedaluwarsa dan backup data 
+Private E-commerce  |  Hal. 23 dari 33 
+Komponen Gambar / Versi Fungsi dalam Sistem 
+mysql mysql:8.0 Database utama untuk menyimpan seluruh data sistem 
+redis redis:alpine Penyimpanan sementara untuk sesi pengguna, cache data, dan 
+antrian tugas 
+node node:20-alpine (khusus 
+pengembangan) 
+Server pengembangan lokal untuk membangun aset tampilan 
+antarmuka 
+9. Sistem Pengembalian Barang dan Refund 
+Sistem pengembalian barang dirancang untuk memberikan pengalaman yang adil dan 
+transparan bagi pelanggan, sekaligus memastikan proses verifikasi yang memadai 
+sebelum dana dikembalikan. Pengembalian dapat dilakukan untuk sebagian atau seluruh 
+item dalam satu pesanan. 
+9.1 Syarat Pengajuan Pengembalian 
+Syarat Ketentuan 
+Batas Waktu Pengajuan hanya dapat dilakukan dalam 7 hari kalender setelah status pesanan berubah 
+menjadi Terkirim. 
+Status Pesanan Pesanan harus berstatus Terkirim atau Selesai. 
+Status Pembayaran Pembayaran harus sudah dikonfirmasi berhasil sebelumnya. 
+Pengajuan Aktif Tidak boleh ada pengajuan pengembalian yang masih aktif untuk pesanan yang sama. 
+Pengembalian 
+Sebagian 
+Diperbolehkan memilih hanya sebagian item dari satu pesanan untuk dikembalikan. 
+Bukti Wajib Minimal satu bukti berupa foto atau video wajib dilampirkan saat pengajuan. 
+Batas Unggah Bukti Maksimum 5 file; format yang diterima: JPG, PNG, MP4; ukuran maksimum 10 MB 
+per file. 
+Produk Tidak 
+Eligible 
+Produk tertentu seperti makanan atau produk digital dapat dikecualikan dari program 
+pengembalian. 
+9.2 Tahapan Status Pengembalian 
+Setiap pengajuan pengembalian melewati tahapan yang terurut dan ketat. Perubahan 
+status hanya dapat dilakukan sesuai alur yang sudah ditentukan.  
+Dari Status Ke Status Dilakukan 
+Oleh 
+Syarat yang Harus Dipenuhi 
+Pengajuan Masuk Disetujui Admin Admin telah memeriksa alasan dan bukti yang 
+dilampirkan; pesanan sudah selesai; pengajuan 
+masih dalam batas waktu. 
+Pengajuan Masuk Ditolak Admin Admin mengisi alasan penolakan yang jelas 
+untuk disampaikan kepada pelanggan. 
+Disetujui Barang Dikirim 
+Kembali 
+Customer Pelanggan mengisi nomor resi dan nama kurir 
+pengiriman balik dalam 3 hari kerja. 
+Barang Dikirim 
+Kembali 
+Barang Diterima Admin Admin mencatat kondisi barang yang diterima 
+dan menentukan apakah barang layak dijual 
+kembali. 
+Private E-commerce  |  Hal. 24 dari 33 
+Barang Diterima Refund Diproses Admin Admin mengkonfirmasi jumlah refund dan 
+metode pengembalian dana. 
+Refund Diproses Selesai System Sistem menutup pengajuan secara otomatis 24 
+jam setelah refund diproses. 
+Disetujui Selesai 
+(Kedaluwarsa) 
+System Pelanggan tidak mengirimkan barang dalam batas 
+waktu yang ditentukan. 
+ 
+9.3 Metode Pengembalian Dana 
+Ke Metode Asal Dana dikembalikan melalui metode pembayaran asal yang digunakan pelanggan. Jika 
+didukung oleh Tripay, proses dilakukan secara otomatis; jika tidak, admin 
+memprosesnya secara manual. 
+Transfer Bank Admin melakukan transfer manual ke rekening bank pelanggan dan mengunggah bukti 
+transfer ke sistem. 
+Kredit Toko Dana disimpan sebagai saldo kredit dalam akun pelanggan yang dapat digunakan pada 
+pembelian berikutnya. Fitur ini tersedia pada pengembangan fase berikutnya. 
+9.4 Alur Pemrosesan Pengembalian 
+a. Pelanggan membuka halaman pengembalian dari detail pesanan, memilih item yang 
+ingin dikembalikan, mengisi alasan, dan mengunggah bukti.  
+b. Sistem memverifikasi apakah pesanan memenuhi semua syarat. Jika ya, pengajuan 
+disimpan dan admin mendapat notifikasi.  
+c. Admin meninjau pengajuan beserta buktinya. Jika disetujui, admin menetapkan 
+jumlah refund dan metode pengembalian dana. Jika ditolak, admin mengisi alasan 
+yang akan disampaikan ke pelanggan.  
+d. Pelanggan mendapat notifikasi berisi instruksi pengiriman barang kembali dalam 3 
+hari kerja. 
+e. Pelanggan mengisi nomor resi pengiriman balik ke sistem.  
+f. Admin menerima barang, mencatat kondisinya, dan menentukan apakah barang dapat 
+dijual kembali. 
+g. Jika barang layak dijual kembali, admin memperbarui stok produk terkait.  
+h. Admin memproses pengembalian dana sesuai metode yang telah ditetapkan dan 
+mengunggah bukti jika diperlukan. 
+i. Sistem menutup pengajuan secara otomatis dan pelanggan mendapat notifikasi 
+konfirmasi. 
+10. Alur Status Pesanan 
+Status pesanan mengikuti alur yang ketat dan terurut. Setiap perubahan status hanya dapat 
+dilakukan oleh pihak yang berwenang dan dalam kondisi yang sesuai. Seluruh perubahan 
+dicatat secara permanen dalam riwayat pesanan.  
+10.1 Perubahan Status yang Diizinkan 
+Private E-commerce  |  Hal. 25 dari 33 
+Dari Status Ke Status Dilakukan Oleh Kondisi yang Diperlukan 
+Menunggu 
+Bayar 
+Lunas System Konfirmasi pembayaran berhasil 
+diterima dari Tripay 
+Menunggu 
+Bayar 
+Dibatalkan Customer/System Pelanggan membatalkan secara manual, 
+atau batas waktu pembayaran habis  
+Lunas Diproses System Sistem memperbarui status setelah 
+pembayaran dikonfirmasi 
+Diproses Dikemas Admin Admin mengkonfirmasi barang sudah 
+selesai dikemas 
+Dikemas Dikirim Admin Admin memasukkan nomor resi 
+pengiriman 
+Dikirim Terkirim System/Admin Pengiriman dikonfirmasi telah diterima 
+oleh pelanggan 
+Terkirim Selesai Customer/System Pelanggan mengkonfirmasi, atau berlalu 
+7 hari tanpa pengajuan pengembalian  
+Diproses Dibatalkan Admin Pembatalan oleh admin pada kondisi luar 
+biasa; stok dikembalikan 
+Selesai Direfund Admin Setelah proses pengembalian barang 
+selesai diverifikasi 
+10.2 Perubahan Status yang Tidak Diizinkan  
+Perubahan yang Dilarang Alasan 
+Menunggu Bayar → Dikirim Tidak ada proses konfirmasi pembayaran dan pengemasan 
+yang terlewati 
+Dikirim → Menunggu Bayar Status tidak dapat mundur setelah barang dikirim  
+Selesai → Dibatalkan Pesanan yang sudah selesai tidak dapat dibatalkan  
+Dibatalkan → Status Apapun  Pembatalan adalah status akhir; tidak ada perubahan lebih 
+lanjut yang diizinkan 
+Terkirim → Diproses Status tidak dapat mundur ke tahap sebelumnya  
+10.3 Ketentuan per Status 
+a. Menunggu Bayar: stok sudah direservasi sejak checkout (reserved_stock 
+bertambah). Stok yang direservasi tidak tersedia bagi pelanggan lain. Pelanggan 
+masih dapat membatalkan pesanan; jika dibatalkan, reservasi dilepas otomatis.  
+b. Lunas: pembayaran dikonfirmasi. Stok dikurangi secara permanen. Admin mulai 
+memproses pesanan. 
+c. Diproses: admin sedang menangani pesanan. Pelanggan tidak dapat membatalkan; 
+hanya admin yang dapat membatalkan dalam kondisi luar biasa.  
+d. Dikemas: barang sudah siap dikirim. Admin dapat memasukkan nomor resi.  
+Private E-commerce  |  Hal. 26 dari 33 
+e. Dikirim: nomor resi tersimpan. Pelanggan dapat memantau status pengiriman.  
+f. Terkirim: konfirmasi penerimaan barang. Pelanggan memiliki waktu 7 hari untuk 
+mengajukan pengembalian atau mengkonfirmasi selesai.  
+g. Selesai: pesanan ditutup. Pelanggan dapat memberikan ulasan. Pengembalian tidak 
+lagi dapat diajukan. 
+h. Dibatalkan: status akhir. Stok dikembalikan jika pesanan sudah lunas sebelumnya. 
+Refund diproses jika pembayaran sudah diterima.  
+i. Direfund: status akhir setelah proses pengembalian barang dan dana diselesaikan.  
+ 
+10.4 Perubahan Status Otomatis oleh Sistem  
+a. Pesanan yang belum dibayar dalam batas waktu yang ditentukan akan otomatis 
+berpindah ke status Dibatalkan. Pemeriksaan dilakukan setiap 15 menit.  
+b. Pesanan berstatus Terkirim yang tidak mendapat respons dari pelanggan dalam 7 
+hari akan otomatis berpindah ke status Selesai. Pemeriksaan dilakukan setiap hari.  
+11. Pencegahan Barang Terjual Ganda (Overselling) 
+Sistem memiliki empat mekanisme utama untuk memastikan tidak terjadi penjualan ganda 
+(overselling), bahkan pada saat lalu lintas transaksi sedang tinggi.  
+11.1 Reservasi Stok Saat Checkout (Reservation System)  
+a. Saat pelanggan mengkonfirmasi checkout, sistem langsung mengamankan 
+(mereservasi) stok seluruh item secara bersamaan menggunakan satu database 
+transaction. Kolom reserved_stock pada tabel product_variants ditambah sejumlah 
+quantity yang dipesan. Constra int database memastikan reserved_stock tidak 
+pernah melebihi stock. 
+b. Jika ada satu item yang stok tersedianya tidak mencukupi (stock - reserved_stock < 
+quantity), seluruh proses checkout dibatalkan dan tidak ada reservasi yang 
+tersimpan. Pelanggan diberitahu item mana yang tidak tersedia.  
+c. Source of truth stok adalah: stok_tersedia = stock -  reserved_stock. Nilai ini yang 
+ditampilkan kepada pelanggan di halaman produk. Pengurutan query reservasi 
+dilakukan secara konsisten berdasarkan urutan ID produk untuk mencegah 
+deadlock. 
+11.2 Penanganan Persaingan Transaksi (Concurrency Control)  
+a. Karena reservasi menggunakan atomic database transaction dengan kondisi 
+WHERE yang ketat, dua pelanggan yang checkout bersamaan tidak dapat 
+mereservasi stok yang sama melebihi jumlah yang tersedia. Salah satu akan berhasil 
+dan yang lain akan gagal denga n pesan stok tidak tersedia. 
+b. Jika terjadi deadlock pada transaksi database (kondisi sangat jarang), sistem 
+melakukan percobaan ulang otomatis hingga 3 kali. Jika semua percobaan gagal, 
+pesanan tidak jadi dibuat dan pelanggan mendapat pesan untuk mencoba kembali.  
+c. Batas waktu operasi reservasi dibatasi 10 detik agar sistem tetap responsif. Timeout 
+ini diterapkan pada level database connection.  
+11.3 Manajemen Batas Waktu Reservasi (Fixed TTL)  
+Private E-commerce  |  Hal. 27 dari 33 
+a. Setiap pesanan memiliki kolom expired_at pada tabel payments yang diisi saat 
+tagihan dibuat. Nilai expired_at ditentukan oleh Tripay (umumnya 24 jam). 
+Reservasi stok berlaku selama pesanan belum expired_at.  
+b. Sistem menggunakan Fixed TTL — tidak ada mekanisme heartbeat atau 
+perpanjangan manual. Batas waktu ditetapkan sekali saat pesanan dibuat dan tidak 
+berubah. Ini menyederhanakan implementasi dan menghilangkan risiko 
+perpanjangan yang tidak terkontrol.  
+c. Scheduler berjalan setiap 15 menit untuk mencari pesanan dengan status pending 
+yang sudah melewati expired_at. Untuk setiap pesanan yang ditemukan, scheduler 
+melepas reservasi stok (mengurangi reserved_stock) dan mengubah status pesanan 
+menjadi cancelled secara atomik dalam satu transaction. Proses ini menggunakan 
+SELECT ... FOR UPDATE untuk mencegah race condition antara scheduler dan 
+webhook Tripay. 
+11.4 Pengamanan Tambahan (Idempotency dan Audit)  
+a. Mekanisme idempotensi pada lapisan cache memastikan checkout yang sama tidak 
+diproses dua kali akibat klik ganda (double click). Kunci idempotensi disimpan di 
+Redis selama 60 detik. 
+b. Pelepasan reservasi yang kedaluwarsa diproses oleh queue worker di latar belakang, 
+bukan di request cycle utama, sehingga tidak mempengaruhi performa halaman 
+pelanggan. 
+c. Seluruh aktivitas reservasi, finalisasi, dan pelepasan stok dicatat secara real -time 
+untuk kebutuhan audit dan pemantauan performa server.  
+12. Pengiriman dan Logistik 
+12.1 Standar Layanan Pengiriman 
+Layanan Estimasi Waktu Catatan Operasional Penetapan Biaya 
+Pengiriman Internal 
+— K ota Semarang 
+• Pesanan sebelum 
+pukul 14.00: diproses 
+untuk same -day 
+delivery (hari yang 
+sama), dengan 
+estimasi waktu 
+pengiriman fleksibel 
+tergantung kondisi 
+operasional, 
+kapasitas kurir, dan 
+jarak tujuan.  
+• Pesanan setelah 
+pukul 14.00: diproses 
+pada hari kerja 
+berikutnya.  
+• Layanan hanya 
+berlaku untuk area 
+cakupan tertentu di 
+Kota Semarang (zona 
+layanan internal).  
+• Pengiriman same -
+day bersifat subject 
+to capacity ; jika 
+Tidak menggunakan 
+kurir eksternal. Biaya 
+dihitung berdasarkan 
+konfigurasi admin. 
+Tarif tetap atau per kilogram, 
+dikonfigurasi oleh admin 
+Private E-commerce  |  Hal. 28 dari 33 
+Layanan Estimasi Waktu Catatan Operasional Penetapan Biaya 
+kapasitas pengiriman 
+pada hari tersebut 
+telah penuh, pesanan 
+akan dijadwalkan ke 
+hari kerja berikutnya.  
+• Dalam kondisi 
+tertentu (misalnya 
+gangguan 
+operasional atau 
+keterbatasan kurir), 
+pengiriman dapat 
+dialihkan 
+menggunakan 
+layanan kurir 
+eksternal dengan 
+pemberitahuan 
+kepada pelanggan. 
+JNE Reguler 2–7 hari kerja 
+tergantung jarak tujuan 
+Layanan andalan untuk 
+pengiriman dengan 
+harga terjangkau 
+Mengikuti tarif resmi JNE 
+sesuai data RajaOngkir 
+JNE YES (Next-Day) 1 hari kerja Layanan premium untuk 
+kebutuhan cepat; harga 
+lebih tinggi 
+Mengikuti tarif resmi JNE 
+sesuai data RajaOngkir 
+J&T Kargo 3–10 hari kerja Cocok untuk produk 
+dengan berat lebih dari 5 
+kg; harga kompetitif 
+untuk barang berat 
+Mengikuti tarif resmi J&T 
+sesuai data RajaOngkir 
+Layanan Cadangan Mengikuti estimasi 
+internal 
+Digunakan saat semua 
+layanan kurir eksternal 
+tidak dapat dihubungi; 
+pelanggan diberitahu 
+tarif bersifat perkiraan 
+Menggunakan tarif estimasi 
+yang disiapkan sebelumnya 
+12.2 Logika Batas Waktu Pengiriman Hari Ini  
+a. Batas waktu pengiriman hari yang sama ditetapkan pada pukul 14.00 waktu 
+Indonesia Barat. Konfigurasi ini dapat diubah oleh admin tanpa perlu mengubah 
+kode program. 
+b. Pesanan yang masuk sebelum pukul 14.00 pada hari kerja akan dikirimkan pada 
+hari yang sama. 
+c. Pesanan yang masuk setelah pukul 14.00, atau pada hari libur nasional, akan 
+diproses dan dikirimkan pada hari kerja berikutnya.  
+d. Hari libur nasional dikelola dalam daftar yang dapat diperbarui oleh admin, 
+sehingga estimasi pengiriman selalu akurat.  
+12.3 Variasi Tarif Pengiriman Internal  
+Jenis Tarif Penjelasan Cocok Untuk 
+Tarif Tetap Satu harga berlaku untuk semua berat dalam 
+satu pengiriman 
+Produk dengan berat yang relatif 
+seragam 
+Private E-commerce  |  Hal. 29 dari 33 
+Jenis Tarif Penjelasan Cocok Untuk 
+Tarif per Kilogram Harga dihitung proporsional terhadap berat 
+total 
+Produk dengan rentang berat yang 
+bervariasi 
+Tarif Bertingkat Harga berbeda-beda berdasarkan rentang berat 
+yang telah ditentukan 
+Situasi di mana biaya pengiriman perlu 
+lebih adil untuk berbagai ukuran pesanan 
+Semua jenis tarif dapat dikelola langsung oleh admin melalui halaman pengaturan 
+pengiriman tanpa perlu bantuan tim teknis.  
+12.4 Strategi Cadangan Saat Layanan Kurir Tidak Tersedia 
+a. Sistem mencoba menghubungi RajaOngkir dengan batas waktu 5 detik dan satu 
+kali percobaan ulang jika gagal.  
+b. Jika masih gagal, sistem memeriksa data tersimpan dari permintaan sebelumnya 
+dengan tujuan yang sama. 
+c. Jika tidak ada data tersimpan, sistem menggunakan tabel tarif estimasi 
+berdasarkan zona pengiriman: Jawa, Luar Jawa, dan Indonesia Timur.  
+d. Pelanggan mendapat informasi bahwa ongkos kirim yang ditampilkan bersifat 
+perkiraan, dan admin akan mengkonfirmasi sebelum barang dikirim.  
+e. Admin mendapat pemberitahuan bahwa layanan RajaOngkir sedang bermasalah 
+agar dapat ditindaklanjuti. 
+13. Penguatan Sistem Pembayaran 
+13.1 Penanganan Notifikasi Berulang dari Tripay  
+a. Tripay dapat mengirimkan notifikasi yang sama lebih dari sekali jika tidak 
+menerima respons yang diharapkan. Sistem dirancang untuk mengenali dan 
+mengabaikan notifikasi duplikat tersebut.  
+b. Setiap notifikasi yang masuk disimpan bersama dengan waktu penerimaannya. 
+Sebelum memproses, sistem memeriksa apakah notifikasi dengan referensi yang 
+sama sudah pernah ditangani. 
+c. Jika terjadi kegagalan di tengah pemrosesan notifikasi, perubahan data dibatalkan 
+sepenuhnya sehingga tidak ada data yang tersimpan setengah jalan. Tripay dapat 
+mengirim ulang dan notifikasi akan diproses dari awal.  
+ 
+13.2 Rekonsiliasi Manual Pembayaran  
+Aspek Penjelasan 
+Tujuan Memastikan tidak ada pembayaran yang berhasil di sisi Tripay 
+namun belum tercatat di sistem, yang dapat menyebabkan pesanan 
+tidak diproses meskipun pelanggan sudah membayar.  
+Pemicu Admin dapat melakukan pemeriksaan kapan saja melalui halaman 
+rekonsiliasi, atau sistem menjalankan pemeriksaan otomatis setiap 
+malam. 
+Lingkup Semua pembayaran dengan status 'Belum Bayar' yang sudah dibuat 
+lebih dari satu jam yang lalu. 
+Private E-commerce  |  Hal. 30 dari 33 
+Aspek Penjelasan 
+Cara Kerja Sistem memeriksa status setiap pembayaran langsung ke Tripay 
+dan membandingkannya dengan catatan di sistem.  
+Penanganan 
+Ketidaksesuaian 
+Jika Tripay mencatat pembayaran berhasil namun sistem belum 
+memperbarui, admin dapat memicu pembaruan status secara 
+manual. 
+Hasil Pemeriksaan Setiap pemeriksaan dicatat beserta hasilnya untuk keperluan audit 
+dan pelaporan. 
+13.3 Pemulihan dari Kegagalan Pembayaran  
+a. Jika koneksi ke Tripay gagal saat membuat tagihan pembayaran, pesanan tidak jadi 
+dibuat dan pelanggan mendapat pesan untuk mencoba kembali beberapa saat 
+kemudian. 
+b. Jika pembayaran gagal atau kedaluwarsa, reservasi stok yang sebelumnya 
+diamankan saat checkout dilepas secara otomatis dan pesanan dibatalkan. Stok 
+kembali tersedia bagi pelanggan lain. Pelanggan mendapat pemberitahuan beserta 
+tautan untuk memesan ulang.  
+c. Pemeriksaan pesanan yang melewati batas waktu pembayaran dilakukan setiap 15 
+menit secara otomatis. 
+d. Pelanggan tidak dapat melanjutkan pembayaran pesanan lama yang sudah 
+dibatalkan, mereka harus memulai proses pemesanan baru.  
+13.4 Pencegahan Penipuan Dasar 
+Skenario Cara Penanganannya 
+Percobaan Buat 
+Tagihan Ganda 
+Jika sudah ada tagihan aktif untuk pesanan yang sama, pembuatan 
+tagihan baru ditolak dengan pesan konflik.  
+Notifikasi dari Sumber 
+Tidak Dikenal 
+Setiap notifikasi masuk diperiksa keasliannya menggunakan tanda 
+tangan digital. Notifikasi yang tidak lolos verifikasi ditolak dan 
+dicatat. 
+Jumlah Tagihan Tidak 
+Sesuai 
+Sistem memverifikasi bahwa jumlah dalam notifikasi sesuai dengan 
+total pesanan. Ketidaksesuaian dicatat sebagai indikasi aktivitas 
+mencurigakan. 
+Banyak Percobaan dari 
+Satu Alamat 
+Lebih dari 10 percobaan membuat pembayaran dari satu alamat 
+jaringan dalam 5 menit akan diblokir sementara dan dicatat sebagai 
+aktivitas mencurigakan. 
+Gagal Berulang pada 
+Pesanan Sama 
+Pesanan yang mengalami lebih dari tiga kegagalan pembayaran 
+ditandai untuk ditinjau oleh admin. 
+14. Strategi Penanganan Kegagalan 
+Sistem dirancang untuk tetap berfungsi semaksimal mungkin meskipun salah satu 
+komponen mengalami masalah. Prinsip utamanya adalah degradasi yang anggun: jika fitur 
+Private E-commerce  |  Hal. 31 dari 33 
+tertentu tidak dapat berjalan optimal, sistem menggunakan alternatif terbaik yang tersedia 
+dan memberi tahu pengguna secara transparan.  
+Skenario Kegagalan Cara Penanganan Dampak pada 
+Pengguna 
+Layanan Tripay tidak 
+merespons saat membuat 
+tagihan 
+Sistem mencoba sekali lagi; jika tetap gagal, 
+pesanan tidak jadi dibuat. Pelanggan mendapat 
+pesan untuk mencoba beberapa menit lagi. Admin 
+mendapat pemberitahuan. 
+Pesanan tidak terbuat; 
+reservasi stok tidak 
+dilakukan; pelanggan dapat 
+mencoba kembali 
+Notifikasi pembayaran 
+terlambat atau tidak 
+terkirim 
+Admin dapat melakukan pemeriksaan rekonsiliasi 
+manual kapan saja untuk memverifikasi status 
+pembayaran langsung ke Tripay 
+Tidak ada kerugian 
+permanen; dapat 
+diselesaikan melalui 
+rekonsiliasi manual 
+Layanan RajaOngkir tidak 
+dapat dihubungi 
+Sistem menggunakan data ongkir yang tersimpan 
+sebelumnya, atau tarif estimasi cadangan. Pelanggan 
+tetap dapat melanjutkan checkout dengan catatan 
+estimasi. 
+Checkout tetap berjalan; 
+ongkir bersifat perkiraan 
+Layanan Redis tidak 
+tersedia 
+Sesi pengguna dialihkan ke penyimpanan berbasis 
+file. Cache langsung mengambil data dari database. 
+Tugas antrian disimpan ke database sementara. 
+Sistem lebih lambat namun 
+tetap berfungsi 
+Worker antrian berhenti 
+mendadak 
+Container otomatis dinyalakan kembali oleh 
+Docker. Tugas yang belum selesai disimpan dan 
+dapat diproses ulang. 
+Penundaan singkat pada 
+pengiriman email dan 
+notifikasi; pulih otomatis 
+Kapasitas penyimpanan 
+server hampir penuh 
+Sistem mengirimkan peringatan saat penggunaan 
+disk mencapai 85%. Admin mendapat notifikasi 
+untuk mengambil tindakan. 
+Sistem tetap berjalan; 
+membutuhkan tindakan 
+admin untuk mencegah 
+kegagalan total 
+Memori server habis pada 
+proses tertentu 
+Proses yang bermasalah dihentikan dan dimulai 
+ulang secara otomatis. Ekspor data besar diproses 
+secara bertahap untuk mencegah kehabisan memori. 
+Permintaan yang sedang 
+berjalan gagal . permintaan 
+berikutnya normal 
+15. Development Milestones 
+Sprint Scope Estimasi 
+1 Setup project, Docker, DB migration, seeding, auth (Breeze + Inertia). 3–4 hari 
+2 Kategori & Produk CRUD (admin), product images, variasi & stock 
+management. 
+3–4 hari 
+3 Storefront: home, kategori, detail produk, search & filter. 3–4 hari 
+4 Cart system (guest + auth), merge logic saat login (item guest digabung ke cart 
+user, cart guest dihapus), persistent cart. 
+2–3 hari 
+5 Checkout flow, shipping logic (RajaOngkir + internal Semarang), address 
+management. 
+3–4 hari 
+6 Payment gateway Tripay integration + webhook callback + idempotency. 3–4 hari 
+7 Order management (buyer & admin), status update, input resi, order tracking. 3–4 hari 
+8 Return system (buyer request + admin manage + restock logic + refund). 2–3 hari 
+Private E-commerce  |  Hal. 32 dari 33 
+Sprint Scope Estimasi 
+9 Dashboard admin, analytics, review system, notification email, promosi 
+(Want). 
+2–3 hari 
+10 Security hardening, testing, bug fix, UI polish, deployment production. 3–5 hari 
+Total estimasi: 27–38 hari kerja 
+15.1 Ketergantungan Kritis Antar Sprint  
+a. Sprint 1 (Foundation) harus selesai sepenuhnya sebelum sprint lainnya dimulai, 
+karena schema database dan auth menjadi fondasi seluruh sistem.  
+b. Sprint 5 (Checkout) bergantung pada Sprint 2–4 karena membutuhkan produk, stok, 
+dan keranjang yang sudah berfungsi.  
+c. Sprint 6 (Payment) harus selesai sebelum Sprint 8 (Return) karena return hanya 
+dapat dilakukan untuk pesanan yang pembayarannya sudah confirmed.  
+d. Sprint 10 (Hardening) bersifat final dan memerlukan semua fitur Must sudah 
+berfungsi dari Sprint 1–9. 
+16. Peta Jalan Pengembangan ke Depan 
+Peta jalan ini mendeskripsikan evolusi sistem setelah Fase 1 selesai. Setiap fase dibangun 
+di atas fondasi fase sebelumnya tanpa merusak fitur yang sudah ada.  
+ 
+Fase Jadwal Nama Isi Utama NFR/FR 
+Fase 1 Sprint 1–10 (27–
+38 hari) 
+Peluncuran MVP Peluncuran versi awal (MVP) yang 
+mencakup seluruh fitur utama 
+(Must) dan beberapa fitur tambahan 
+(Want). Sistem berjalan dengan 
+arsitektur monolithic pada satu 
+server khusus untuk satu penjual 
+utama. Rilis ini sudah dilengkapi 
+integrasi Tripay, RajaOngkir, retur 
+& refund, serta dashboard analitik 
+dasar. 
+Seluruh 
+dokumen TDD 
+ini 
+Fase 2 Bulan 2 Peningkatan 
+Kapasitas & 
+Keamanan 
+Fokus pada peningkatan keamanan 
+dan performa. Meliputi penerapan 
+CDN untuk mempercepat pemuatan 
+halaman dan menahan serangan 
+siber, pemisahan database khusus 
+analitik, penambahan Autentikasi 
+Dua Faktor (2FA), serta dukungan 
+transaksi multi-mata uang. 
+NFR008, 
+NFR010 
+Fase 3 Bulan 3 Optimasi & 
+Kecerdasan 
+Pengembangan fitur cerdas untuk 
+meningkatkan pengalaman belanja. 
+Mencakup sistem rekomendasi 
+produk cerdas berdasarkan 
+kebiasaan pembeli, notifikasi 
+otomatis admin saat stok menipis, 
+SEO tingkat lanjut, dan program 
+poin loyalitas pelanggan. 
+FR035, FR037 
+16.1 Komponen yang Dapat  
+Private E-commerce  |  Hal. 33 dari 33 
+a. Penyedia pembayaran, sistem dirancang dengan antarmuka abstrak sehingga Tripay 
+dapat diganti atau ditambah dengan penyedia lain tanpa mengubah logika pesanan.  
+b. Penyedia data ongkir, RajaOngkir dapat diganti dengan penyedia lain atau integrasi 
+langsung ke API kurir menggunakan antarmuka yang sama.  
+c. Saluran notifikasi, saluran baru seperti WhatsApp atau push notification dapat 
+ditambahkan tanpa mengubah logika pengiriman notifikasi yang sudah ada.  
+d. Penyimpanan antrian, Redis sebagai antrian dapat diganti dengan sistem antrian lain 
+yang lebih kuat jika volume tugas meningkat drastis.  
+ 
