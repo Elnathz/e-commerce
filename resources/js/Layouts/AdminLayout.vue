@@ -39,6 +39,12 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Dashboard
                                 </NavLink>
+                                
+                                <NavLink
+                                    href="/"
+                                >
+                                    Lihat Toko
+                                </NavLink>
 
                                 <!-- Admin Links -->
                                 <template v-if="$page.props.auth.user.role === 'admin'">

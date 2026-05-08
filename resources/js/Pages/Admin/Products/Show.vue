@@ -1,5 +1,5 @@
 <script setup>
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -73,7 +73,7 @@ const setPrimaryImage = (imageId) => {
 <template>
     <Head :title="'Detail: ' + product.name" />
 
-    <AuthenticatedLayout>
+    <AdminLayout>
         <template #header>
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <h2 class="text-xl font-semibold leading-tight text-gray-900 dark:text-white">
@@ -243,5 +243,5 @@ const setPrimaryImage = (imageId) => {
 
             </div>
         </div>
-    </AuthenticatedLayout>
+    </AdminLayout>
 </template>

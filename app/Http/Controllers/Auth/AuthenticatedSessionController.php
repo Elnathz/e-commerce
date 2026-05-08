@@ -33,7 +33,8 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Redirect SEMUA user (termasuk admin) ke halaman utama toko (Storefront)
+        return redirect()->intended('/');
     }
 
     /**
