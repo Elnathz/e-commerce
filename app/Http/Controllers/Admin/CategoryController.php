@@ -14,7 +14,8 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        $categories = Category::with('parent')->latest()->paginate(10);
+        // Urutkan berdasarkan nama secara alfabetis (A-Z) agar lebih masuk akal untuk pengguna awam
+        $categories = Category::with('parent')->orderBy('name', 'asc')->paginate(10);
         return Inertia::render('Admin/Categories/Index', [
             'categories' => $categories
         ]);
@@ -35,7 +36,6 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|max:2048',
-            'sort_order' => 'integer',
             'is_active' => 'boolean'
         ]);
 
@@ -65,7 +65,6 @@ class CategoryController extends Controller
             'name' => 'required|string|max:255',
             'parent_id' => 'nullable|exists:categories,id',
             'image' => 'nullable|image|max:2048',
-            'sort_order' => 'integer',
             'is_active' => 'boolean'
         ]);
 

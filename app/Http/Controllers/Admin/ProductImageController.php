@@ -14,6 +14,7 @@ class ProductImageController extends Controller
     {
         $request->validate([
             'product_id' => 'required|exists:products,id',
+            'product_variant_id' => 'nullable|exists:product_variants,id',
             'images.*' => 'required|image|max:2048'
         ]);
 
@@ -21,11 +22,17 @@ class ProductImageController extends Controller
             foreach ($request->file('images') as $image) {
                 $path = $image->store('products', 'public');
                 
-                // Set as primary if it's the first image for this product
-                $isPrimary = ProductImage::where('product_id', $request->product_id)->count() === 0;
+                // Set as primary if it's the first image for this product and it's not tied to a variant
+                $isPrimary = false;
+                if (!$request->product_variant_id) {
+                    $isPrimary = ProductImage::where('product_id', $request->product_id)
+                                             ->whereNull('product_variant_id')
+                                             ->count() === 0;
+                }
 
                 ProductImage::create([
                     'product_id' => $request->product_id,
+                    'product_variant_id' => $request->product_variant_id,
                     'image_path' => $path,
                     'is_primary' => $isPrimary,
                 ]);

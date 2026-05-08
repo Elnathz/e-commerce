@@ -17,10 +17,22 @@ const isEditing = !!props.category;
 const form = useForm({
     name: props.category?.name || '',
     parent_id: props.category?.parent_id || '',
-    sort_order: props.category?.sort_order || 0,
-    is_active: props.category ? Boolean(props.category.is_active) : true,
     image: null,
+    sort_order: props.category?.sort_order || 0,
+    is_active: props.category ? props.category.is_active : true,
 });
+
+const handleImageUpload = (event) => {
+    const file = event.target.files[0];
+    if (file && file.size > 2 * 1024 * 1024) { // 2MB
+        form.errors.image = "Ukuran gambar tidak boleh lebih dari 2MB.";
+        form.image = null;
+        event.target.value = ''; // Reset input
+    } else {
+        form.image = file;
+        form.errors.image = null;
+    }
+};
 
 const submit = () => {
     if (isEditing) {
@@ -84,30 +96,18 @@ const submit = () => {
 
                             <!-- Image -->
                             <div>
-                                <InputLabel for="image" value="Gambar Kategori (Opsional)" />
+                                <InputLabel for="image" value="Gambar Kategori (Opsional, Maks 2MB)" />
                                 <div class="mt-1 flex items-center">
                                     <input 
                                         type="file" 
                                         id="image" 
-                                        @input="form.image = $event.target.files[0]"
+                                        @change="handleImageUpload"
                                         class="block w-full text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-300 hover:file:bg-gray-200 dark:hover:file:bg-gray-600 transition-colors"
                                         accept="image/*"
                                     />
                                 </div>
                                 <p v-if="isEditing && category.image_path" class="mt-2 text-sm text-gray-500 dark:text-gray-400">Gambar saat ini sudah tersimpan. Unggah baru untuk mengganti.</p>
                                 <InputError class="mt-2" :message="form.errors.image" />
-                            </div>
-
-                            <!-- Sort Order -->
-                            <div>
-                                <InputLabel for="sort_order" value="Urutan Tampilan (Angka)" />
-                                <TextInput
-                                    id="sort_order"
-                                    type="number"
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
-                                    v-model="form.sort_order"
-                                />
-                                <InputError class="mt-2" :message="form.errors.sort_order" />
                             </div>
 
                             <!-- Is Active -->

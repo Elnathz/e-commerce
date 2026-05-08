@@ -22,7 +22,7 @@ const variantForm = useForm({
 });
 
 const submitVariant = () => {
-    variantForm.post(route('admin.products.variants.store'), {
+    variantForm.post(route('admin.products.variants.store', props.product.id), {
         preserveScroll: true,
         onSuccess: () => variantForm.reset('sku', 'name', 'stock'),
     });
@@ -31,11 +31,33 @@ const submitVariant = () => {
 // Image Form
 const imageForm = useForm({
     product_id: props.product.id,
+    product_variant_id: '',
     images: null,
 });
 
+const handleImagesUpload = (event) => {
+    const files = event.target.files;
+    let hasLargeFile = false;
+    
+    for (let i = 0; i < files.length; i++) {
+        if (files[i].size > 2 * 1024 * 1024) {
+            hasLargeFile = true;
+            break;
+        }
+    }
+
+    if (hasLargeFile) {
+        imageForm.errors.images = "Maksimal ukuran tiap gambar adalah 2MB. Terdapat gambar yang melebihi batas. Silakan pilih ulang.";
+        imageForm.images = null;
+        event.target.value = '';
+    } else {
+        imageForm.images = files;
+        imageForm.errors.images = null;
+    }
+};
+
 const submitImage = () => {
-    imageForm.post(route('admin.products.images.store'), {
+    imageForm.post(route('admin.products.images.store', props.product.id), {
         preserveScroll: true,
         onSuccess: () => imageForm.reset('images'),
     });
@@ -142,19 +164,28 @@ const setPrimaryImage = (imageId) => {
                     
                     <div class="p-6">
                         <!-- Upload Form -->
-                        <form @submit.prevent="submitImage" class="flex flex-col sm:flex-row items-end gap-4 mb-8">
-                            <div class="w-full sm:flex-1">
-                                <InputLabel value="Pilih Foto (Bisa lebih dari satu)" />
+                        <form @submit.prevent="submitImage" class="flex flex-col md:flex-row md:items-end gap-4 mb-8">
+                            <div class="w-full md:w-1/3">
+                                <InputLabel value="Tautkan ke Varian (Opsional)" />
+                                <select v-model="imageForm.product_variant_id" class="w-full mt-1 border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white rounded-md shadow-sm">
+                                    <option value="">-- Foto Umum Produk --</option>
+                                    <option v-for="variant in product.variants" :key="variant.id" :value="variant.id">
+                                        {{ variant.name }}
+                                    </option>
+                                </select>
+                            </div>
+                            <div class="w-full md:flex-1">
+                                <InputLabel value="Pilih Foto (Maks 2MB per foto, Bisa lebih dari satu)" />
                                 <input 
                                     type="file" 
                                     multiple
-                                    @input="imageForm.images = $event.target.files"
+                                    @change="handleImagesUpload"
                                     class="block w-full mt-1 text-sm text-gray-500 dark:text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-gray-100 dark:file:bg-gray-700 file:text-gray-700 dark:file:text-gray-300 hover:file:bg-gray-200 dark:hover:file:bg-gray-600 transition-colors"
                                     accept="image/*"
                                 />
                                 <InputError :message="imageForm.errors['images'] || imageForm.errors['images.0']" class="mt-1" />
                             </div>
-                            <PrimaryButton :disabled="imageForm.processing || !imageForm.images" class="w-full sm:w-auto justify-center bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                            <PrimaryButton :disabled="imageForm.processing || !imageForm.images" class="w-full md:w-auto justify-center bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
                                 Unggah Foto
                             </PrimaryButton>
                         </form>
@@ -164,38 +195,49 @@ const setPrimaryImage = (imageId) => {
                             Belum ada foto.
                         </div>
 
-                        <div v-else class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div v-for="img in product.images" :key="img.id" class="relative group border border-gray-200 dark:border-gray-700 rounded overflow-hidden">
-                                
-                                <div class="aspect-square bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
-                                    <img :src="'/storage/' + img.image_path" class="w-full h-full object-cover" />
+                        <div v-else class="space-y-8">
+                            
+                            <!-- Foto Umum Produk -->
+                            <div v-if="product.images.filter(i => !i.product_variant_id).length > 0">
+                                <h4 class="font-bold text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Foto Umum Produk</h4>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div v-for="img in product.images.filter(i => !i.product_variant_id)" :key="img.id" class="relative group border border-gray-200 dark:border-gray-700 rounded overflow-hidden bg-white dark:bg-gray-800">
+                                        <div class="aspect-square bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+                                            <img :src="'/storage/' + img.image_path" class="w-full h-full object-cover" />
+                                        </div>
+                                        <div v-if="img.is_primary" class="absolute top-2 left-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs px-2 py-1 rounded font-bold shadow">
+                                            UTAMA
+                                        </div>
+                                        <div class="p-3 flex flex-col gap-2">
+                                            <button v-if="!img.is_primary" @click="setPrimaryImage(img.id)" class="text-xs w-full py-1 border border-gray-900 dark:border-gray-100 text-gray-900 dark:text-gray-100 hover:bg-gray-900 dark:hover:bg-white hover:text-white dark:hover:text-gray-900 rounded transition-colors">
+                                                Jadikan Utama
+                                            </button>
+                                            <Link :href="route('admin.products.images.destroy', img.id)" method="delete" as="button" class="text-xs w-full py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">
+                                                Hapus
+                                            </Link>
+                                        </div>
+                                    </div>
                                 </div>
-                                
-                                <div v-if="img.is_primary" class="absolute top-2 left-2 bg-gray-900 dark:bg-white text-white dark:text-gray-900 text-xs px-2 py-1 rounded font-bold">
-                                    UTAMA
-                                </div>
-
-                                <div class="p-3 flex flex-col gap-2">
-                                    <button 
-                                        v-if="!img.is_primary"
-                                        @click="setPrimaryImage(img.id)"
-                                        class="text-xs w-full py-1 border border-gray-900 dark:border-gray-100 text-gray-900 dark:text-gray-100 hover:bg-gray-900 dark:hover:bg-white hover:text-white dark:hover:text-gray-900 rounded transition-colors"
-                                    >
-                                        Jadikan Utama
-                                    </button>
-                                    <Link 
-                                        :href="route('admin.products.images.destroy', img.id)" 
-                                        method="delete" 
-                                        as="button" 
-                                        class="text-xs w-full py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
-                                    >
-                                        Hapus Foto
-                                    </Link>
-                                </div>
-
                             </div>
-                        </div>
 
+                            <!-- Foto Khusus Varian -->
+                            <div v-for="variant in product.variants.filter(v => product.images.some(i => i.product_variant_id === v.id))" :key="'gallery-'+variant.id">
+                                <h4 class="font-bold text-gray-700 dark:text-gray-300 mb-3 border-b border-gray-200 dark:border-gray-700 pb-2">Foto Varian: {{ variant.name }}</h4>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div v-for="img in product.images.filter(i => i.product_variant_id === variant.id)" :key="img.id" class="relative group border border-gray-200 dark:border-gray-700 rounded overflow-hidden bg-white dark:bg-gray-800">
+                                        <div class="aspect-square bg-gray-100 dark:bg-gray-900 flex items-center justify-center">
+                                            <img :src="'/storage/' + img.image_path" class="w-full h-full object-cover" />
+                                        </div>
+                                        <div class="p-3 flex flex-col gap-2">
+                                            <Link :href="route('admin.products.images.destroy', img.id)" method="delete" as="button" class="text-xs w-full py-1 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors">
+                                                Hapus
+                                            </Link>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
                 </div>
 
