@@ -24,4 +24,17 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 });
 
+Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
+    Route::get('/dashboard', function () {
+        return Inertia::render('Admin/Dashboard');
+    })->name('dashboard');
+
+    Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class);
+    Route::resource('products', \App\Http\Controllers\Admin\ProductController::class);
+    
+    // Custom routes for variants and images
+    Route::resource('products.variants', \App\Http\Controllers\Admin\ProductVariantController::class)->except(['index', 'show']);
+    Route::resource('products.images', \App\Http\Controllers\Admin\ProductImageController::class)->only(['store', 'destroy', 'update']);
+});
+
 require __DIR__.'/auth.php';

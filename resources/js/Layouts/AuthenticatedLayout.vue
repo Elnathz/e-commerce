@@ -39,6 +39,22 @@ const showingNavigationDropdown = ref(false);
                                 >
                                     Dashboard
                                 </NavLink>
+
+                                <!-- Admin Links -->
+                                <template v-if="$page.props.auth.user.role === 'admin'">
+                                    <NavLink
+                                        :href="route('admin.categories.index')"
+                                        :active="route().current('admin.categories.*')"
+                                    >
+                                        Kategori
+                                    </NavLink>
+                                    <NavLink
+                                        :href="route('admin.products.index')"
+                                        :active="route().current('admin.products.*')"
+                                    >
+                                        Produk
+                                    </NavLink>
+                                </template>
                             </div>
                         </div>
 
@@ -146,6 +162,22 @@ const showingNavigationDropdown = ref(false);
                         >
                             Dashboard
                         </ResponsiveNavLink>
+
+                        <!-- Admin Links (Mobile) -->
+                        <template v-if="$page.props.auth.user.role === 'admin'">
+                            <ResponsiveNavLink
+                                :href="route('admin.categories.index')"
+                                :active="route().current('admin.categories.*')"
+                            >
+                                Kategori
+                            </ResponsiveNavLink>
+                            <ResponsiveNavLink
+                                :href="route('admin.products.index')"
+                                :active="route().current('admin.products.*')"
+                            >
+                                Produk
+                            </ResponsiveNavLink>
+                        </template>
                     </div>
 
                     <!-- Responsive Settings Options -->
