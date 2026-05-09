@@ -34,8 +34,33 @@ class StorefrontController extends Controller
 
     public function show($slug)
     {
-        // Placeholder for show
-        return Inertia::render('Storefront/Show');
+        $product = Product::with([
+            'category.parent',
+            'variants' => function($q) {
+                $q->where('is_active', true)->orderBy('price', 'asc');
+            },
+            'variants.images',
+            'images' => function($q) {
+                $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
+            },
+        ])->where('slug', $slug)->where('is_active', true)->firstOrFail();
+
+        // Related products from the same category
+        $relatedProducts = Product::with(['variants' => function($q) {
+            $q->where('is_active', true);
+        }, 'images' => function($q) {
+            $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
+        }])
+        ->where('category_id', $product->category_id)
+        ->where('id', '!=', $product->id)
+        ->where('is_active', true)
+        ->take(6)
+        ->get();
+
+        return Inertia::render('Storefront/Show', [
+            'product' => $product,
+            'relatedProducts' => $relatedProducts,
+        ]);
     }
 
     public function search(Request $request)
