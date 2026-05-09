@@ -104,7 +104,7 @@ const mockSmartphones = [
                             <Link 
                                 v-for="child in parent.children" 
                                 :key="child.id"
-                                href="#"
+                                :href="`/search?categories[]=${child.id}`"
                                 class="flex flex-col items-center gap-2 w-[90px] md:w-auto"
                             >
                                 <div class="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-2 group">
