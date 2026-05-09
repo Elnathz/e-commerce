@@ -4,6 +4,7 @@ import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
     products: Array,
+    categories: Array,
 });
 
 // Format currency
@@ -18,23 +19,44 @@ const getPrimaryImage = (product) => {
     return primary ? primary.image_path : product.images[0].image_path;
 };
 
-// Mock data based on the provided assets for UI demonstration
+// Get lowest price among variants, fallback to base_price
+const getLowestPrice = (product) => {
+    if (product.variants && product.variants.length > 0) {
+        const prices = product.variants.map(v => parseFloat(v.price));
+        const lowest = Math.min(...prices);
+        return lowest < parseFloat(product.base_price) ? lowest : parseFloat(product.base_price);
+    }
+    return parseFloat(product.base_price);
+};
+
+// Calculate discount percentage
+const getDiscount = (product) => {
+    const lowest = getLowestPrice(product);
+    const base = parseFloat(product.base_price);
+    if (base <= lowest) return 0;
+    return Math.round(((base - lowest) / base) * 100);
+};
+
+// Group variants by variant_type for smart badge display
+const getGroupedVariants = (variants) => {
+    const groups = {};
+    variants.forEach(v => {
+        const type = v.variant_type || v.name;
+        if (!groups[type]) {
+            groups[type] = { type, count: 0 };
+        }
+        groups[type].count++;
+    });
+    return Object.values(groups);
+};
+
+// Mock data based on the provided assets for UI demonstration (Smartphones only)
 const mockSmartphones = [
     { id: 1, name: 'iPhone 17 Pro Max Blue', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxblue.webp' },
     { id: 2, name: 'iPhone 17 Pro Max Orange', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxorange.webp' },
     { id: 3, name: 'iPhone 17 Pro Max White', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxwhite.webp' },
     { id: 4, name: 'iPhone 17 Black', price: 15000000, old_price: 17000000, discount: '11%', save: 'Rp2.000.000', image: '/images/product/ipon17black.webp' },
     { id: 5, name: 'iPhone 17 White', price: 15000000, old_price: 17000000, discount: '11%', save: 'Rp2.000.000', image: '/images/product/ipon17white.webp' },
-];
-
-const mockCategories = [
-    { name: 'Mobile', image: '/images/category/ipon.png' },
-    { name: 'Cosmetics', image: null },
-    { name: 'Electronics', image: null },
-    { name: 'Furniture', image: '/images/category/sofa.png' },
-    { name: 'Watches', image: null },
-    { name: 'Decor', image: null },
-    { name: 'Accessories', image: null },
 ];
 </script>
 
@@ -102,7 +124,7 @@ const mockCategories = [
             </section>
 
             <!-- Shop From Top Categories -->
-            <section>
+            <section v-if="categories && categories.length > 0">
                 <div class="flex justify-between items-end border-b pb-2 mb-6">
                     <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
                         Shop From <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Top Categories</span>
@@ -112,19 +134,24 @@ const mockCategories = [
                     </Link>
                 </div>
 
-                <div class="flex flex-wrap md:flex-nowrap justify-center md:justify-between gap-4 md:gap-2 text-center pb-4">
-                    <Link 
-                        v-for="(cat, index) in mockCategories" 
-                        :key="index"
-                        href="#"
-                        class="flex flex-col items-center gap-3 w-[100px] md:w-auto"
-                    >
-                        <div class="w-24 h-24 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-4">
-                            <img v-if="cat.image" :src="cat.image" :alt="cat.name" class="w-full h-full object-contain drop-shadow-sm" />
-                            <span v-else class="text-gray-400 text-xs">No Image</span>
+                <div class="space-y-6">
+                    <div v-for="parent in categories" :key="parent.id">
+                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{ parent.name }}</h3>
+                        <div class="flex flex-wrap gap-6 md:gap-8">
+                            <Link 
+                                v-for="child in parent.children" 
+                                :key="child.id"
+                                href="#"
+                                class="flex flex-col items-center gap-2 w-[90px] md:w-auto"
+                            >
+                                <div class="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-2 group">
+                                    <img v-if="child.image_path" :src="'/storage/' + child.image_path" :alt="child.name" class="w-3/4 h-3/4 object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-300" />
+                                    <span v-else class="text-gray-400 text-[10px] font-medium uppercase tracking-wide text-center leading-tight">{{ child.name }}</span>
+                                </div>
+                                <span class="text-xs font-semibold text-gray-700 text-center leading-tight">{{ child.name }}</span>
+                            </Link>
                         </div>
-                        <span class="text-sm font-medium text-gray-700">{{ cat.name }}</span>
-                    </Link>
+                    </div>
                 </div>
             </section>
 
@@ -172,7 +199,7 @@ const mockCategories = [
                 </div>
             </section>
 
-            <!-- Daily Essentials (Actual DB Products Fallback) -->
+            <!-- Daily Essentials (Actual DB Products - Random) -->
             <section v-if="products && products.length > 0">
                 <div class="flex justify-between items-end border-b pb-2 mb-6">
                     <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
@@ -183,24 +210,47 @@ const mockCategories = [
                     </Link>
                 </div>
 
-                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                     <Link 
-                        v-for="product in products.slice(0, 6)" 
+                        v-for="product in products" 
                         :key="product.id"
                         :href="route('products.show', product.slug)"
-                        class="bg-[#F3F9FB] rounded-xl p-4 flex flex-col items-center text-center hover:shadow-md transition-shadow duration-300 group"
+                        class="bg-white border border-gray-100 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col group"
                     >
-                        <div class="w-full aspect-square flex items-center justify-center mb-3">
+                        <!-- Image (full bleed, fixed height, object-cover) -->
+                        <div class="h-48 bg-gray-100 relative overflow-hidden">
                             <img 
                                 v-if="getPrimaryImage(product)" 
                                 :src="'/storage/' + getPrimaryImage(product)" 
                                 :alt="product.name"
-                                class="max-h-full object-contain drop-shadow-sm group-hover:scale-110 transition-transform duration-300"
+                                class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
-                            <div v-else class="text-gray-400 text-xs uppercase">No Image</div>
+                            <div v-else class="w-full h-full flex items-center justify-center text-gray-300 text-xs uppercase tracking-wide">No Image</div>
                         </div>
-                        <h3 class="text-sm text-gray-700 font-medium mb-1 line-clamp-1">{{ product.name }}</h3>
-                        <p class="text-sm font-bold text-gray-900">UP to 50% OFF</p>
+
+                        <!-- Details -->
+                        <div class="p-3 flex flex-col flex-1">
+                            <!-- Product Name -->
+                            <h3 class="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug mb-1.5">{{ product.name }}</h3>
+
+                            <!-- Variant Tags (grouped by type) -->
+                            <div v-if="product.variants && product.variants.length > 0" class="flex flex-wrap gap-1 mb-2">
+                                <template v-for="group in getGroupedVariants(product.variants)" :key="group.type">
+                                    <span class="text-[11px] text-gray-500 border border-gray-200 rounded-full px-2 py-0.5 bg-gray-50">
+                                        {{ group.type }} <span v-if="group.count > 1" class="text-gray-400">+{{ group.count - 1 }}</span>
+                                    </span>
+                                </template>
+                            </div>
+
+                            <!-- Price -->
+                            <div class="mt-auto pt-1">
+                                <div class="text-base font-bold text-gray-900">{{ formatPrice(getLowestPrice(product)) }}</div>
+                                <div v-if="product.base_price > getLowestPrice(product)" class="flex items-center gap-1.5 mt-0.5">
+                                    <span class="text-xs text-gray-400 line-through">{{ formatPrice(product.base_price) }}</span>
+                                    <span class="text-[11px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">{{ getDiscount(product) }}%</span>
+                                </div>
+                            </div>
+                        </div>
                     </Link>
                 </div>
             </section>

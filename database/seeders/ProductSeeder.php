@@ -1,0 +1,142 @@
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Seeder;
+
+class ProductSeeder extends Seeder
+{
+    /**
+     * Run the database seeds.
+     */
+    public function run(): void
+    {
+        \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('seed_products');
+
+        $smartphoneCat = \App\Models\Category::where('slug', 'smartphone')->first();
+        $perlengkapanCat = \App\Models\Category::where('slug', 'perlengkapan-rumah')->first();
+        $campingCat = \App\Models\Category::where('slug', 'camping-memancing')->first();
+
+        $products = [
+            [
+                'category_id' => $smartphoneCat->id,
+                'name' => 'iPhone 17 Pro Max',
+                'slug' => 'iphone-17-pro-max',
+                'description' => 'The ultimate iPhone experience with cutting-edge performance and stunning cameras.',
+                'base_price' => 27000000,
+                'weight_gram' => 300,
+                'variants' => [
+                    ['sku' => 'IP17PM-BLU', 'name' => 'Blue Titanium', 'variant_type' => 'Warna', 'price' => 25000000, 'stock' => 50, 'image' => 'ipon17promaxblue.webp'],
+                    ['sku' => 'IP17PM-ORG', 'name' => 'Orange Titanium', 'variant_type' => 'Warna', 'price' => 25000000, 'stock' => 30, 'image' => 'ipon17promaxorange.webp'],
+                    ['sku' => 'IP17PM-WHT', 'name' => 'White Titanium', 'variant_type' => 'Warna', 'price' => 27000000, 'stock' => 20, 'image' => 'ipon17promaxwhite.webp'],
+                ]
+            ],
+            [
+                'category_id' => $smartphoneCat->id,
+                'name' => 'iPhone 17',
+                'slug' => 'iphone-17',
+                'description' => 'A beautifully designed smartphone with everything you need.',
+                'base_price' => 17000000,
+                'weight_gram' => 250,
+                'variants' => [
+                    ['sku' => 'IP17-BLK', 'name' => 'Black', 'variant_type' => 'Warna', 'price' => 15000000, 'stock' => 100, 'image' => 'ipon17black.webp'],
+                    ['sku' => 'IP17-WHT', 'name' => 'White', 'variant_type' => 'Warna', 'price' => 17000000, 'stock' => 50, 'image' => 'ipon17white.webp'],
+                ]
+            ],
+            [
+                'category_id' => $perlengkapanCat->id,
+                'name' => 'Kantong Plastik Vakum Pakaian',
+                'slug' => 'kantong-plastik-vakum',
+                'description' => 'Hemat tempat di koper atau lemari dengan kantong vakum kedap udara.',
+                'base_price' => 50000,
+                'weight_gram' => 200,
+                'variants' => [
+                    ['sku' => 'VAC-5070', 'name' => '50x70 cm', 'variant_type' => 'Ukuran', 'price' => 35000, 'stock' => 200, 'image' => 'kantongplastikvakum.jpg'],
+                    ['sku' => 'VAC-6080', 'name' => '60x80 cm', 'variant_type' => 'Ukuran', 'price' => 50000, 'stock' => 150, 'image' => 'kantongplastikvakum.jpg'],
+                ]
+            ],
+            [
+                'category_id' => $perlengkapanCat->id,
+                'name' => 'Pelapis Kabel Insulasi Bakar',
+                'slug' => 'pelapis-kabel-insulasi',
+                'description' => 'Lindungi kabel Anda agar tidak mudah putus dan korsleting.',
+                'base_price' => 20000,
+                'weight_gram' => 50,
+                'variants' => [
+                    ['sku' => 'CBL-BLK', 'name' => 'Hitam', 'variant_type' => 'Warna', 'price' => 15000, 'stock' => 500, 'image' => 'pelapiskabelinsulasi.jpg'],
+                    ['sku' => 'CBL-RED', 'name' => 'Merah', 'variant_type' => 'Warna', 'price' => 15000, 'stock' => 500, 'image' => 'pelapiskabelinsulasi.jpg'],
+                ]
+            ],
+            [
+                'category_id' => $campingCat->id,
+                'name' => 'Rell Pancing Berkualitas',
+                'slug' => 'rell-pancing',
+                'description' => 'Rell pancing tarikan ringan, anti karat untuk memancing di laut maupun air tawar.',
+                'base_price' => 150000,
+                'weight_gram' => 450,
+                'variants' => [
+                    ['sku' => 'FISH-1000', 'name' => '1000 Series', 'variant_type' => 'Seri', 'price' => 120000, 'stock' => 40, 'image' => 'rellpancing.jpg'],
+                    ['sku' => 'FISH-2000', 'name' => '2000 Series', 'variant_type' => 'Seri', 'price' => 150000, 'stock' => 30, 'image' => 'rellpancing.jpg'],
+                ]
+            ],
+            [
+                'category_id' => $campingCat->id,
+                'name' => 'Tenda Camping Otomatis Anti Air',
+                'slug' => 'tenda-camping-otomatis',
+                'description' => 'Tenda mudah dirakit, cukup ditarik langsung berdiri. Bahan waterproof kuat dari hujan dan angin.',
+                'base_price' => 450000,
+                'weight_gram' => 2500,
+                'variants' => [
+                    ['sku' => 'TENT-2P', 'name' => 'Kapasitas 2 Orang', 'variant_type' => 'Kapasitas', 'price' => 350000, 'stock' => 15, 'image' => 'Tenda.jpg'],
+                    ['sku' => 'TENT-4P', 'name' => 'Kapasitas 4 Orang', 'variant_type' => 'Kapasitas', 'price' => 450000, 'stock' => 10, 'image' => 'Tenda.jpg'],
+                ]
+            ]
+        ];
+
+        foreach ($products as $pData) {
+            $product = \App\Models\Product::create([
+                'category_id' => $pData['category_id'],
+                'name' => $pData['name'],
+                'slug' => $pData['slug'],
+                'description' => $pData['description'],
+                'base_price' => $pData['base_price'],
+                'weight_gram' => $pData['weight_gram'],
+                'is_active' => true,
+            ]);
+
+            $isFirstVariant = true;
+            $sortOrder = 0;
+
+            foreach ($pData['variants'] as $vData) {
+                $variant = $product->variants()->create([
+                    'sku' => $vData['sku'],
+                    'name' => $vData['name'],
+                    'variant_type' => $vData['variant_type'] ?? null,
+                    'price' => $vData['price'],
+                    'stock' => $vData['stock'],
+                    'weight_gram' => $pData['weight_gram'],
+                    'is_active' => true,
+                ]);
+
+                // Copy and attach image if exists
+                if ($vData['image']) {
+                    $source = public_path('images/product/' . $vData['image']);
+                    $target = 'seed_products/' . uniqid() . '_' . $vData['image'];
+                    
+                    if (file_exists($source)) {
+                        \Illuminate\Support\Facades\File::copy($source, storage_path('app/public/' . $target));
+
+                        $product->images()->create([
+                            'product_variant_id' => $variant->id,
+                            'image_path' => $target,
+                            'is_primary' => $isFirstVariant, // First variant's image acts as primary product image for simplicity
+                            'sort_order' => $sortOrder++,
+                        ]);
+                        $isFirstVariant = false;
+                    }
+                }
+            }
+        }
+    }
+}

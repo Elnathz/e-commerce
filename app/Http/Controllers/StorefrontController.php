@@ -10,15 +10,25 @@ class StorefrontController extends Controller
 {
     public function index()
     {
-        $products = Product::with(['category', 'images' => function($q) {
-            $q->where('is_primary', true)->orWhereNull('product_variant_id');
+        $products = Product::with(['category', 'variants' => function($q) {
+            $q->where('is_active', true);
+        }, 'images' => function($q) {
+            $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
         }])
         ->where('is_active', true)
-        ->latest()
+        ->inRandomOrder()
+        ->take(12)
         ->get();
 
+        $categories = \App\Models\Category::with('children')
+            ->where('is_active', true)
+            ->whereNull('parent_id')
+            ->orderBy('sort_order')
+            ->get();
+
         return Inertia::render('Storefront/Index', [
-            'products' => $products
+            'products' => $products,
+            'categories' => $categories
         ]);
     }
 

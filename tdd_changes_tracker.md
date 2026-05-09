@@ -12,3 +12,5 @@ Gunakan file ini untuk mencatat setiap perubahan struktur *database* atau arsite
    - `GET /products/{slug}` -> Halaman detail produk untuk pembeli.
    - Menghapus fungsi *redirect* otomatis ke `/admin/dashboard` saat login. Semua *user* (termasuk Admin) akan diarahkan ke `/` setelah *login*. Akses Admin dipindahkan ke menu *dropdown* profil di *Storefront*.
    - *Alasan*: Menyatukan pengalaman pengguna awal di halaman publik, dan membuat arsitektur rute etalase yang lebih standar untuk e-commerce (langsung menampilkan produk di *root url*).
+3. **[PENDING] Database Schema**: Menambahkan kolom `variant_type` (Tipe: `string`, Length: `100`, Nullable) pada tabel `product_variants`.
+   - *Alasan*: Digunakan untuk mengelompokkan varian di tampilan kartu produk (*Storefront*) — misal: "Warna +2" atau "Ukuran +1" — agar UI lebih bersih dan terorganisir dibandingkan menampilkan semua nama varian secara mentah.
