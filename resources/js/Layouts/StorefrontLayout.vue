@@ -139,54 +139,39 @@ const submitSearch = () => {
         <!-- Sub Navbar (Categories) -->
         <div class="bg-white border-b border-gray-100 hidden md:block">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex items-center gap-6 py-3 overflow-x-auto no-scrollbar">
+                <div class="flex flex-wrap items-center gap-4 py-3">
                     
-                    <button class="flex items-center gap-1 bg-blue-500 text-white px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-600 transition-colors">
-                        Groceries 
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-                    
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Premium Fruits 
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Home & Kitchen
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Fashion
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Electronics
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Beauty
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-                    
-                    <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                        Sports, Toys & Luggage
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                    </button>
-
+                    <!-- Dynamic Categories -->
+                    <div v-for="parent in page.props.globalCategories" :key="parent.id" class="relative group">
+                        <!-- Parent Category Button (Trigger) -->
+                        <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
+                            {{ parent.name }}
+                            <svg v-if="parent.children && parent.children.length > 0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
+                        </button>
+                        
+                        <!-- Dropdown Children -->
+                        <div v-if="parent.children && parent.children.length > 0" class="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden py-1">
+                            <Link v-for="child in parent.children" :key="child.id" :href="`/search?categories[]=${child.id}`" class="block px-4 py-2 text-sm text-gray-700 hover:bg-[#F3F9FB] hover:text-blue-600 transition-colors">
+                                {{ child.name }}
+                            </Link>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
 
         <!-- Mobile Menu (Toggleable) -->
-        <div v-if="showingMobileMenu" class="md:hidden bg-white border-b border-gray-200 px-4 py-2 space-y-2">
-            <Link href="/" class="block text-sm text-gray-700 py-2">Groceries</Link>
-            <Link href="/" class="block text-sm text-gray-700 py-2">Premium Fruits</Link>
-            <Link href="/" class="block text-sm text-gray-700 py-2">Home & Kitchen</Link>
-            <Link href="/" class="block text-sm text-gray-700 py-2">Fashion</Link>
-            <Link href="/" class="block text-sm text-gray-700 py-2">Electronics</Link>
+        <div v-if="showingMobileMenu" class="md:hidden bg-white border-b border-gray-200 px-4 py-2 max-h-[70vh] overflow-y-auto shadow-inner">
+            <template v-for="parent in page.props.globalCategories" :key="parent.id">
+                <div class="py-2 border-b border-gray-50 last:border-0">
+                    <div class="font-semibold text-sm text-gray-800">{{ parent.name }}</div>
+                    <div v-if="parent.children && parent.children.length > 0" class="mt-2 pl-3 border-l-2 border-blue-100 space-y-1">
+                        <Link v-for="child in parent.children" :key="child.id" :href="`/search?categories[]=${child.id}`" class="block text-sm text-gray-600 hover:text-blue-600 py-1.5">
+                            {{ child.name }}
+                        </Link>
+                    </div>
+                </div>
+            </template>
         </div>
 
         <!-- Page Content -->

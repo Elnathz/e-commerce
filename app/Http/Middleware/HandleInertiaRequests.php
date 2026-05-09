@@ -34,6 +34,11 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $request->user(),
             ],
+            'globalCategories' => fn () => \App\Models\Category::with('children')
+                ->where('is_active', true)
+                ->whereNull('parent_id')
+                ->orderBy('sort_order')
+                ->get(['id', 'name', 'slug', 'image_path']),
         ];
     }
 }
