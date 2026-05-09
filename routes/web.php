@@ -8,6 +8,7 @@ use Inertia\Inertia;
 use App\Http\Controllers\StorefrontController;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
+Route::get('/search', [StorefrontController::class, 'search'])->name('search');
 Route::get('/products/{slug}', [StorefrontController::class, 'show'])->name('products.show');
 
 // Redirect legacy dashboard route to home since we unified login redirect

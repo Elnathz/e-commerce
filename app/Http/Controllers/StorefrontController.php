@@ -37,4 +37,105 @@ class StorefrontController extends Controller
         // Placeholder for show
         return Inertia::render('Storefront/Show');
     }
+
+    public function search(Request $request)
+    {
+        $query = Product::with(['category', 'variants' => function($q) {
+            $q->where('is_active', true);
+        }, 'images' => function($q) {
+            $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
+        }])->where('is_active', true);
+
+        // Keyword search
+        if ($request->filled('q')) {
+            $keyword = $request->q;
+            $query->where(function($q) use ($keyword) {
+                $q->where('name', 'like', "%{$keyword}%")
+                  ->orWhere('description', 'like', "%{$keyword}%");
+            });
+        }
+
+        // Stock filter
+        if ($request->boolean('in_stock')) {
+            $query->whereHas('variants', function($q) {
+                $q->where('is_active', true)->where('stock', '>', 0);
+            });
+        }
+
+        // Price range
+        if ($request->filled('price_min')) {
+            $query->where('base_price', '>=', $request->price_min);
+        }
+        if ($request->filled('price_max')) {
+            $query->where('base_price', '<=', $request->price_max);
+        }
+
+        // Category filter
+        if ($request->filled('categories')) {
+            $query->whereIn('category_id', $request->categories);
+        }
+
+        // Color filter (variant_type = Warna)
+        if ($request->filled('colors')) {
+            $query->whereHas('variants', function($q) use ($request) {
+                $q->where('variant_type', 'Warna')
+                  ->whereIn('name', $request->colors);
+            });
+        }
+
+        // Sorting
+        switch ($request->get('sort', 'best_match')) {
+            case 'az':
+                $query->orderBy('name', 'asc');
+                break;
+            case 'za':
+                $query->orderBy('name', 'desc');
+                break;
+            case 'price_low':
+                $query->orderBy('base_price', 'asc');
+                break;
+            case 'price_high':
+                $query->orderBy('base_price', 'desc');
+                break;
+            case 'newest':
+                $query->latest();
+                break;
+            case 'oldest':
+                $query->oldest();
+                break;
+            case 'recommended':
+                $query->inRandomOrder();
+                break;
+            default: // best_match
+                if ($request->filled('q')) {
+                    // Relevance: exact name match first
+                    $query->orderByRaw("CASE WHEN name LIKE ? THEN 0 ELSE 1 END", [$request->q . '%']);
+                }
+                $query->latest();
+                break;
+        }
+
+        $products = $query->paginate(12)->withQueryString();
+
+        // Available filters data
+        $availableCategories = \App\Models\Category::where('is_active', true)
+            ->whereNotNull('parent_id')
+            ->orderBy('name')
+            ->get(['id', 'name', 'parent_id']);
+
+        $availableColors = \App\Models\ProductVariant::where('variant_type', 'Warna')
+            ->where('is_active', true)
+            ->distinct()
+            ->pluck('name')
+            ->sort()
+            ->values();
+
+        return Inertia::render('Storefront/Search', [
+            'products' => $products,
+            'filters' => $request->only(['q', 'in_stock', 'price_min', 'price_max', 'categories', 'colors', 'sort']),
+            'availableCategories' => $availableCategories,
+            'availableColors' => $availableColors,
+            'totalResults' => $products->total(),
+        ]);
+    }
 }

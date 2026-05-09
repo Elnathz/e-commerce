@@ -3,9 +3,25 @@ import { ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
+import { watch } from 'vue';
 
 const showingMobileMenu = ref(false);
+const page = usePage();
+const searchQuery = ref(page.props.filters?.q || '');
+
+// Keep search bar in sync if we navigate or search changes
+watch(() => page.props.filters?.q, (newQ) => {
+    searchQuery.value = newQ || '';
+});
+
+const submitSearch = () => {
+    if (searchQuery.value.trim()) {
+        router.get('/search', { q: searchQuery.value.trim() });
+    } else {
+        router.get('/search');
+    }
+};
 </script>
 
 <template>
@@ -46,15 +62,15 @@ const showingMobileMenu = ref(false);
 
                     <!-- Center: Search Bar -->
                     <div class="hidden md:flex flex-1 max-w-2xl ml-4 lg:ml-8 mr-auto">
-                        <div class="relative w-full flex items-center bg-[#F3F9FB] rounded-md overflow-hidden">
+                        <form @submit.prevent="submitSearch" class="relative w-full flex items-center bg-[#F3F9FB] rounded-md overflow-hidden">
                             <span class="pl-4 text-gray-400">
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                             </span>
-                            <input type="text" placeholder="Search essentials, groceries and more..." class="w-full border-0 bg-transparent py-2.5 px-3 focus:ring-0 text-sm text-gray-700 placeholder-gray-400" />
-                            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm font-semibold transition-colors">
+                            <input v-model="searchQuery" type="text" placeholder="Search essentials, groceries and more..." class="w-full border-0 bg-transparent py-2.5 px-3 focus:ring-0 text-sm text-gray-700 placeholder-gray-400" />
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm font-semibold transition-colors">
                                 Search
                             </button>
-                        </div>
+                        </form>
                     </div>
 
                     <!-- Right: Auth & Cart -->
@@ -110,12 +126,12 @@ const showingMobileMenu = ref(false);
 
                 <!-- Mobile Search Bar (Visible only on small screens) -->
                 <div class="mt-3 md:hidden">
-                    <div class="relative w-full flex items-center bg-[#F3F9FB] rounded-md overflow-hidden">
+                    <form @submit.prevent="submitSearch" class="relative w-full flex items-center bg-[#F3F9FB] rounded-md overflow-hidden">
                         <span class="pl-3 text-gray-400">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                         </span>
-                        <input type="text" placeholder="Search..." class="w-full border-0 bg-transparent py-2 px-2 focus:ring-0 text-sm text-gray-700" />
-                    </div>
+                        <input v-model="searchQuery" type="text" placeholder="Search..." class="w-full border-0 bg-transparent py-2 px-2 focus:ring-0 text-sm text-gray-700" />
+                    </form>
                 </div>
             </div>
         </nav>
