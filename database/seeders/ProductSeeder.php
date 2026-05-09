@@ -14,9 +14,9 @@ class ProductSeeder extends Seeder
     {
         \Illuminate\Support\Facades\Storage::disk('public')->makeDirectory('seed_products');
 
-        $smartphoneCat = \App\Models\Category::where('slug', 'smartphone')->first();
-        $perlengkapanCat = \App\Models\Category::where('slug', 'perlengkapan-rumah')->first();
-        $campingCat = \App\Models\Category::where('slug', 'camping-memancing')->first();
+        $smartphoneCat = \App\Models\Category::query()->where('slug', 'smartphone')->first();
+        $perlengkapanCat = \App\Models\Category::query()->where('slug', 'perlengkapan-rumah')->first();
+        $campingCat = \App\Models\Category::query()->where('slug', 'camping-memancing')->first();
 
         $products = [
             [

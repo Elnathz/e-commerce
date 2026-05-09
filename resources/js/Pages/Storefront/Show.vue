@@ -192,7 +192,7 @@ const onGalleryScroll = () => {
                     </div>
 
                     <!-- Desktop: Main Image Carousel + Thumbnail Strip -->
-                    <div class="hidden md:block sticky top-6">
+                    <div class="hidden md:block sticky top-28">
                         <div class="bg-gray-50 rounded-2xl flex items-center justify-center aspect-square overflow-hidden border border-gray-100 relative group">
                             <img v-if="activeImage" :src="activeImage" :alt="product.name" class="w-full h-full object-cover transition-all duration-300" />
                             <div v-else class="text-gray-300 text-sm">No Image</div>

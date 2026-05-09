@@ -32,7 +32,7 @@ class StorefrontController extends Controller
         ]);
     }
 
-    public function show($slug)
+    public function show(string $slug)
     {
         $product = Product::with([
             'category.parent',
@@ -109,7 +109,7 @@ class StorefrontController extends Controller
         }
 
         // Sorting
-        switch ($request->get('sort', 'best_match')) {
+        switch ($request->input('sort', 'best_match')) {
             case 'az':
                 $query->orderBy('name', 'asc');
                 break;
@@ -143,12 +143,12 @@ class StorefrontController extends Controller
         $products = $query->paginate(12)->withQueryString();
 
         // Available filters data
-        $availableCategories = \App\Models\Category::where('is_active', true)
+        $availableCategories = \App\Models\Category::query()->where('is_active', true)
             ->whereNotNull('parent_id')
             ->orderBy('name')
             ->get(['id', 'name', 'parent_id']);
 
-        $availableColors = \App\Models\ProductVariant::where('variant_type', 'Warna')
+        $availableColors = \App\Models\ProductVariant::query()->where('variant_type', 'Warna')
             ->where('is_active', true)
             ->distinct()
             ->pluck('name')
