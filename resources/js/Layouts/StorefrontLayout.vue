@@ -1,14 +1,17 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, watch, computed } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
+import CartDrawer from '@/Components/Storefront/CartDrawer.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
-import { watch } from 'vue';
 
 const showingMobileMenu = ref(false);
+const showCartDrawer = ref(false);
 const page = usePage();
 const searchQuery = ref(page.props.filters?.q || '');
+
+const cartCount = computed(() => page.props.cartCount || 0);
 
 // Keep search bar in sync if we navigate or search changes
 watch(() => page.props.filters?.q, (newQ) => {
@@ -22,6 +25,35 @@ const submitSearch = () => {
         router.get('/search');
     }
 };
+
+// Toast notification
+const toastMessage = ref('');
+const toastType = ref('success');
+const showToast = ref(false);
+let toastTimeout = null;
+
+const triggerToast = (message, type = 'success') => {
+    toastMessage.value = message;
+    toastType.value = type;
+    showToast.value = true;
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => { showToast.value = false; }, 3000);
+};
+
+// Watch for flash messages from cart operations
+watch(() => page.props.flash?.cart_success, (msg) => {
+    if (msg) {
+        triggerToast(msg, 'success');
+        // Open cart drawer on desktop after successful add
+        if (window.innerWidth >= 768) {
+            showCartDrawer.value = true;
+        }
+    }
+});
+
+watch(() => page.props.flash?.cart_error, (msg) => {
+    if (msg) triggerToast(msg, 'error');
+});
 </script>
 
 <template>
@@ -115,11 +147,16 @@ const submitSearch = () => {
 
                         <div class="w-px h-5 bg-gray-300 hidden md:block"></div>
 
-                        <!-- Cart -->
-                        <Link href="/" class="flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                        <!-- Cart (Mobile: navigate to /cart, Desktop: open drawer) -->
+                        <Link :href="route('cart.index')" class="md:hidden relative flex items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>
-                            <span class="hidden md:inline">Cart</span>
+                            <span v-if="cartCount > 0" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{{ cartCount > 9 ? '9+' : cartCount }}</span>
                         </Link>
+                        <button @click="showCartDrawer = true" class="hidden md:flex relative items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>
+                            <span>Cart</span>
+                            <span v-if="cartCount > 0" class="absolute -top-1.5 -right-2.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{{ cartCount > 9 ? '9+' : cartCount }}</span>
+                        </button>
                     </div>
 
                 </div>
@@ -246,6 +283,25 @@ const submitSearch = () => {
                 </div>
             </div>
         </footer>
+
+        <!-- Cart Drawer (Desktop) -->
+        <CartDrawer :show="showCartDrawer" @close="showCartDrawer = false" />
+
+        <!-- Toast Notification -->
+        <Transition
+            enter-active-class="transition-all duration-300 ease-out"
+            enter-from-class="translate-y-4 opacity-0"
+            enter-to-class="translate-y-0 opacity-100"
+            leave-active-class="transition-all duration-200 ease-in"
+            leave-from-class="translate-y-0 opacity-100"
+            leave-to-class="translate-y-4 opacity-0"
+        >
+            <div v-if="showToast" class="fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl shadow-2xl text-sm font-semibold flex items-center gap-2" :class="toastType === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'">
+                <svg v-if="toastType === 'success'" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12Zm13.36-1.814a.75.75 0 1 0-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 0 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.14-.094l3.75-5.25Z" clip-rule="evenodd" /></svg>
+                <svg v-else xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12ZM12 8.25a.75.75 0 0 1 .75.75v3.75a.75.75 0 0 1-1.5 0V9a.75.75 0 0 1 .75-.75Zm0 8.25a.75.75 0 1 0 0-1.5.75.75 0 0 0 0 1.5Z" clip-rule="evenodd" /></svg>
+                {{ toastMessage }}
+            </div>
+        </Transition>
     </div>
 </template>
 <style>
