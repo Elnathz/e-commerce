@@ -29,9 +29,17 @@ class AuthenticatedSessionController extends Controller
      */
     public function store(LoginRequest $request): RedirectResponse
     {
+        // Capture guest session ID BEFORE authentication regenerates it
+        $guestSessionId = $request->session()->getId();
+
         $request->authenticate();
 
         $request->session()->regenerate();
+
+        // Merge guest cart into user cart (if any)
+        if ($guestSessionId) {
+            app(\App\Services\CartService::class)->mergeCarts($guestSessionId, Auth::id());
+        }
 
         // Redirect SEMUA user (termasuk admin) ke halaman utama toko (Storefront)
         return redirect()->intended('/');
