@@ -4,10 +4,12 @@ import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import CartDrawer from '@/Components/Storefront/CartDrawer.vue';
+import ShoppingMethodDrawer from '@/Components/Storefront/ShoppingMethodDrawer.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 
 const showingMobileMenu = ref(false);
 const showCartDrawer = ref(false);
+const showShoppingMethodDrawer = ref(false);
 const page = usePage();
 const searchQuery = ref(page.props.filters?.q || '');
 
@@ -24,6 +26,11 @@ const submitSearch = () => {
     } else {
         router.get('/search');
     }
+};
+
+const handleCheckout = () => {
+    showCartDrawer.value = false;
+    showShoppingMethodDrawer.value = true;
 };
 
 // Toast notification
@@ -285,7 +292,10 @@ watch(() => page.props.flash?.cart_error, (msg) => {
         </footer>
 
         <!-- Cart Drawer (Desktop) -->
-        <CartDrawer :show="showCartDrawer" @close="showCartDrawer = false" />
+        <CartDrawer :show="showCartDrawer" @close="showCartDrawer = false" @checkout="handleCheckout" />
+
+        <!-- Shopping Method Drawer (Pre-Checkout) -->
+        <ShoppingMethodDrawer :show="showShoppingMethodDrawer" @close="showShoppingMethodDrawer = false" />
 
         <!-- Toast Notification -->
         <Transition

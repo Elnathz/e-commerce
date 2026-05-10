@@ -27,6 +27,16 @@ const addToCart = () => {
     });
 };
 
+const buyNow = () => {
+    if (!selectedVariant.value || currentStock.value <= 0 || isAddingToCart.value) return;
+    isAddingToCart.value = true;
+    router.post(route('cart.addItem'), {
+        product_variant_id: selectedVariant.value.id,
+        quantity: quantity.value,
+        direct_checkout: true,
+    });
+};
+
 // ─── Gallery State ───
 // Foto Umum: gambar produk yang TIDAK terikat ke varian manapun
 const generalImages = computed(() => {
@@ -329,7 +339,7 @@ const onGalleryScroll = () => {
 
                     <!-- Add to Cart (Desktop) -->
                     <div class="hidden md:flex flex-wrap gap-3 mt-6">
-                        <button :disabled="currentStock <= 0" :class="[
+                        <button :disabled="currentStock <= 0 || isAddingToCart" @click="buyNow" :class="[
                             'flex-1 flex items-center justify-center gap-2 py-3.5 rounded-xl text-sm md:text-base font-bold border-2 transition-all duration-200',
                             currentStock > 0
                                 ? 'border-blue-600 text-blue-600 hover:bg-blue-50'
@@ -481,7 +491,7 @@ const onGalleryScroll = () => {
 
                 <!-- Add to Cart Buttons -->
                 <div class="flex-1 flex gap-2">
-                    <button :disabled="currentStock <= 0" :class="[
+                    <button :disabled="currentStock <= 0 || isAddingToCart" @click="buyNow" :class="[
                         'flex-1 flex items-center justify-center py-3 rounded-xl text-xs sm:text-sm font-bold transition-all border-2',
                         currentStock > 0
                             ? 'border-blue-600 text-blue-600 active:bg-blue-50'

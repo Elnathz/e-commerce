@@ -71,14 +71,19 @@ class CartController extends Controller
         $request->validate([
             'product_variant_id' => 'required|integer|exists:product_variants,id',
             'quantity' => 'required|integer|min:1',
+            'direct_checkout' => 'nullable|boolean',
         ]);
 
         try {
-            $this->cartService->addItem(
+            $item = $this->cartService->addItem(
                 $request,
                 $request->integer('product_variant_id'),
                 $request->integer('quantity')
             );
+
+            if ($request->boolean('direct_checkout')) {
+                return redirect()->route('cart.index', ['direct_checkout_item' => $item->id]);
+            }
 
             return back()->with('cart_success', 'Produk berhasil ditambahkan ke keranjang!');
         } catch (\Exception $e) {

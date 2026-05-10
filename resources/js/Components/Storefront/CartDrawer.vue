@@ -6,7 +6,7 @@ const props = defineProps({
     show: Boolean,
 });
 
-const emit = defineEmits(['close']);
+const emit = defineEmits(['close', 'checkout']);
 
 const page = usePage();
 
@@ -140,7 +140,7 @@ const removeItem = (itemId) => {
                     <button @click="goToCart" class="py-3 rounded-xl text-sm font-bold border-2 border-blue-600 text-blue-600 hover:bg-blue-50 transition-colors">
                         Lihat Keranjang
                     </button>
-                    <button class="py-3 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-not-allowed opacity-60" disabled title="Checkout tersedia di Sprint 5">
+                    <button @click="emit('checkout')" class="py-3 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors">
                         Checkout
                     </button>
                 </div>

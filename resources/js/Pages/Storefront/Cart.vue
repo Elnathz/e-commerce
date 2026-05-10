@@ -1,15 +1,50 @@
 <script setup>
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
+import ShoppingMethodDrawer from '@/Components/Storefront/ShoppingMethodDrawer.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 
 defineOptions({ layout: StorefrontLayout });
+
+const showShoppingMethodDrawer = ref(false);
 
 const props = defineProps({
     cartItems: { type: Array, default: () => [] },
 });
 
 const selectedItems = ref(props.cartItems.map(item => item.id));
+
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search);
+    const directCheckoutItem = params.get('direct_checkout_item');
+    if (directCheckoutItem) {
+        const itemId = parseInt(directCheckoutItem);
+        // Only select this item
+        selectedItems.value = [itemId];
+        
+        // Open drawer immediately
+        showShoppingMethodDrawer.value = true;
+        
+        // Remove query param from url without refreshing
+        window.history.replaceState({}, '', window.location.pathname);
+    }
+});
+
+const openShoppingMethod = () => {
+    // Only proceed if there are selected items
+    if (selectedItems.value.length === 0) return;
+    
+    showShoppingMethodDrawer.value = true;
+};
+
+const handleProceed = (method) => {
+    router.get(route('checkout.index'), {
+        method: method,
+        items: selectedItems.value.join(',')
+    });
+};
+
+
 
 const isSelected = (id) => selectedItems.value.includes(id);
 
@@ -162,7 +197,7 @@ const removeItem = (itemId) => {
                             <span class="font-bold text-gray-900">Total</span>
                             <span class="text-xl font-black text-gray-900">{{ formatPrice(subtotal) }}</span>
                         </div>
-                        <button class="w-full py-3.5 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-not-allowed opacity-60" disabled title="Checkout tersedia di Sprint 5">
+                        <button @click="openShoppingMethod" :disabled="selectedItems.length === 0" :class="['w-full py-3.5 rounded-xl text-sm font-bold text-white transition-colors', selectedItems.length === 0 ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700']">
                             Checkout ({{ totalQuantity }})
                         </button>
                     </div>
@@ -186,10 +221,13 @@ const removeItem = (itemId) => {
                 </div>
                 
                 <!-- Checkout Button -->
-                <button class="px-6 py-3 rounded-xl text-sm font-bold bg-blue-600 text-white cursor-not-allowed opacity-60" disabled>
+                <button @click="openShoppingMethod" :disabled="selectedItems.length === 0" :class="['px-6 py-3 rounded-xl text-sm font-bold text-white transition-colors', selectedItems.length === 0 ? 'bg-blue-300 cursor-not-allowed' : 'bg-blue-600']">
                     Checkout ({{ totalQuantity }})
                 </button>
             </div>
         </div>
+
+        <!-- Pre-Checkout Drawer -->
+        <ShoppingMethodDrawer :show="showShoppingMethodDrawer" @close="showShoppingMethodDrawer = false" @proceed="handleProceed" />
     </div>
 </template>
