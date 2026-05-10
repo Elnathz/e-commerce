@@ -6,10 +6,17 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 use App\Http\Controllers\StorefrontController;
+use App\Http\Controllers\CartController;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
 Route::get('/search', [StorefrontController::class, 'search'])->name('search');
 Route::get('/products/{slug}', [StorefrontController::class, 'show'])->name('products.show');
+
+// Cart routes (accessible by both guests and authenticated users)
+Route::get('/cart', [CartController::class, 'index'])->name('cart.index');
+Route::post('/cart/items', [CartController::class, 'addItem'])->name('cart.addItem');
+Route::patch('/cart/items/{cartItem}', [CartController::class, 'updateItem'])->name('cart.updateItem');
+Route::delete('/cart/items/{cartItem}', [CartController::class, 'removeItem'])->name('cart.removeItem');
 
 // Redirect legacy dashboard route to home since we unified login redirect
 Route::get('/dashboard', function () {
