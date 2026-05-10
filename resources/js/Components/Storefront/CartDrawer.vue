@@ -32,14 +32,14 @@ const updateQuantity = (itemId, newQty) => {
     if (newQty < 1) return;
     router.patch(route('cart.updateItem', itemId), { quantity: newQty }, {
         preserveScroll: true,
-        preserveState: false,
+        preserveState: true,
     });
 };
 
 const removeItem = (itemId) => {
     router.delete(route('cart.removeItem', itemId), {
         preserveScroll: true,
-        preserveState: false,
+        preserveState: true,
     });
 };
 </script>
