@@ -18,6 +18,13 @@ Route::post('/cart/items', [CartController::class, 'addItem'])->name('cart.addIt
 Route::patch('/cart/items/{cartItem}', [CartController::class, 'updateItem'])->name('cart.updateItem');
 Route::delete('/cart/items/{cartItem}', [CartController::class, 'removeItem'])->name('cart.removeItem');
 
+// Address API (for form options)
+Route::get('/api/provinces', [\App\Http\Controllers\AddressController::class, 'getProvinces'])->name('api.provinces');
+Route::get('/api/cities/{province_id}', [\App\Http\Controllers\AddressController::class, 'getCities'])->name('api.cities');
+
+// Checkout API
+Route::post('/checkout/shipping-cost', [\App\Http\Controllers\CheckoutController::class, 'calculateShipping'])->name('checkout.shippingCost');
+
 // Redirect legacy dashboard route to home since we unified login redirect
 Route::get('/dashboard', function () {
     return redirect('/');
@@ -27,6 +34,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    
+    // Address management
+    Route::resource('addresses', \App\Http\Controllers\AddressController::class)->only(['store', 'update', 'destroy']);
+    Route::patch('/addresses/{address}/set-default', [\App\Http\Controllers\AddressController::class, 'setDefault'])->name('addresses.setDefault');
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
