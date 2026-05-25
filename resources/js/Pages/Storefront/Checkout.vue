@@ -2,6 +2,7 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import { Head, Link, useForm, router } from '@inertiajs/vue3';
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
+import AddressFormModal from '@/Components/Storefront/AddressFormModal.vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -20,6 +21,9 @@ const shippingCost = ref(0);
 const shippingOptions = ref([]);
 const isLoadingShipping = ref(false);
 const shippingError = ref('');
+const showAddressModal = ref(false);
+const isPlacingOrder = ref(false);
+const orderError = ref('');
 
 // Form for placing order
 const form = useForm({
@@ -45,6 +49,13 @@ const selectedAddress = computed(() => {
     if (!props.addresses || props.addresses.length === 0) return null;
     return props.addresses.find(a => a.id === selectedAddressId.value) || props.addresses.find(a => a.is_default) || props.addresses[0];
 });
+
+// Check for out-of-stock items
+const outOfStockItems = computed(() => {
+    return props.cartItems.filter(item => item.available_stock < item.quantity);
+});
+
+const hasStockIssue = computed(() => outOfStockItems.value.length > 0);
 
 // Initialize
 onMounted(() => {
@@ -83,7 +94,7 @@ const calculateShipping = async () => {
 
         if (response.data.success && response.data.results && response.data.results.length > 0) {
             shippingOptions.value = response.data.results[0].costs;
-            
+
             // Auto-select first option
             if (shippingOptions.value.length > 0) {
                 selectShippingOption(shippingOptions.value[0]);
@@ -106,14 +117,24 @@ const selectShippingOption = (option) => {
 };
 
 const placeOrder = () => {
-    if (props.method === 'delivery' && (!form.address_id || !form.shipping_service)) {
-        alert('Pilih alamat dan layanan pengiriman terlebih dahulu.');
+    if (hasStockIssue.value) {
+        orderError.value = 'Beberapa item stoknya tidak mencukupi. Silakan kembali ke keranjang.';
         return;
     }
-    
+
+    if (props.method === 'delivery' && (!form.address_id || !form.shipping_service)) {
+        orderError.value = 'Pilih alamat dan layanan pengiriman terlebih dahulu.';
+        return;
+    }
+
+    orderError.value = '';
     form.post(route('checkout.store'));
 };
 
+const onAddressSaved = () => {
+    // Reload page to get updated addresses list
+    router.reload({ only: ['addresses'] });
+};
 </script>
 
 <template>
@@ -124,10 +145,28 @@ const placeOrder = () => {
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <h1 class="text-2xl font-bold text-gray-900 mb-8">Checkout</h1>
 
+                <!-- Global Error -->
+                <div v-if="orderError" class="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-sm font-semibold text-red-600 flex items-start gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mt-0.5 flex-shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" /></svg>
+                    <span>{{ orderError }}</span>
+                </div>
+
+                <!-- Stock Warning -->
+                <div v-if="hasStockIssue" class="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200">
+                    <h4 class="font-bold text-amber-800 text-sm mb-2">⚠️ Stok Tidak Mencukupi</h4>
+                    <ul class="text-sm text-amber-700 space-y-1">
+                        <li v-for="item in outOfStockItems" :key="item.id">
+                            <strong>{{ item.product_name }}</strong> ({{ item.variant_name }})
+                            — tersedia: {{ item.available_stock }}, diminta: {{ item.quantity }}
+                        </li>
+                    </ul>
+                    <Link href="/cart" class="inline-block mt-3 text-sm font-bold text-amber-800 underline">Kembali ke Keranjang</Link>
+                </div>
+
                 <div class="flex flex-col lg:flex-row gap-8">
                     <!-- Left Column: Shipping & Payment Info -->
                     <div class="flex-1 space-y-6">
-                        
+
                         <!-- Alert if API Key is missing -->
                         <div v-if="method === 'delivery' && !rajaongkirKeyExists" class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl flex items-start gap-3">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 mt-0.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3Z" /></svg>
@@ -159,7 +198,7 @@ const placeOrder = () => {
                                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
                                     Alamat Pengiriman
                                 </h2>
-                                <button class="text-sm font-semibold text-blue-600 hover:text-blue-800">Tambah Alamat Baru</button>
+                                <button @click="showAddressModal = true" class="text-sm font-semibold text-blue-600 hover:text-blue-800">+ Tambah Alamat Baru</button>
                             </div>
 
                             <div v-if="addresses.length > 0" class="space-y-3">
@@ -181,7 +220,7 @@ const placeOrder = () => {
                             </div>
                             <div v-else class="text-center py-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
                                 <p class="text-gray-500 mb-3">Anda belum memiliki alamat tersimpan.</p>
-                                <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">Tambah Alamat</button>
+                                <button @click="showAddressModal = true" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-blue-700">Tambah Alamat</button>
                             </div>
                         </div>
 
@@ -191,7 +230,7 @@ const placeOrder = () => {
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
                                 Opsi Pengiriman
                             </h2>
-                            
+
                             <!-- Courier Selector -->
                             <div class="mb-4">
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">Pilih Kurir</label>
@@ -239,13 +278,23 @@ const placeOrder = () => {
                             </div>
                         </div>
 
+                        <!-- Notes -->
+                        <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                            <h2 class="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+                                Catatan Pesanan
+                            </h2>
+                            <textarea v-model="form.notes" rows="3" placeholder="Contoh: Tolong packing rapi, barang fragile..."
+                                class="w-full px-4 py-3 rounded-xl bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-600 transition-all font-medium text-gray-900 text-sm resize-none"></textarea>
+                        </div>
+
                     </div>
 
                     <!-- Right Column: Order Summary -->
                     <div class="lg:w-96 shrink-0">
                         <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 sticky top-24">
                             <h2 class="text-lg font-bold text-gray-900 mb-4">Ringkasan Pesanan</h2>
-                            
+
                             <!-- Items -->
                             <div class="space-y-4 mb-6 max-h-64 overflow-y-auto pr-2">
                                 <div v-for="item in cartItems" :key="item.id" class="flex gap-3">
@@ -260,6 +309,10 @@ const placeOrder = () => {
                                             <span class="text-xs text-gray-500">{{ item.quantity }} x {{ formatPrice(item.current_price) }}</span>
                                             <span class="text-sm font-bold text-gray-900">{{ formatPrice(item.current_price * item.quantity) }}</span>
                                         </div>
+                                        <!-- Stock warning per item -->
+                                        <p v-if="item.available_stock < item.quantity" class="text-xs text-red-500 font-semibold mt-1">
+                                            ⚠️ Stok tersisa {{ item.available_stock }}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -286,18 +339,23 @@ const placeOrder = () => {
                                 </div>
                             </div>
 
-                            <button 
-                                @click="placeOrder" 
+                            <button
+                                @click="placeOrder"
                                 class="w-full py-3.5 rounded-xl text-sm font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                :disabled="method === 'delivery' && (!form.address_id || !form.shipping_service || isLoadingShipping)"
+                                :disabled="hasStockIssue || form.processing || (method === 'delivery' && (!form.address_id || !form.shipping_service || isLoadingShipping))"
                             >
-                                Bayar Sekarang
+                                {{ form.processing ? 'Memproses...' : 'Buat Pesanan' }}
                             </button>
+
+                            <p class="text-xs text-gray-400 text-center mt-3">Batas waktu pembayaran: 24 jam setelah pesanan dibuat</p>
                         </div>
                     </div>
                 </div>
 
             </div>
         </div>
+
+        <!-- Address Form Modal -->
+        <AddressFormModal :show="showAddressModal" @close="showAddressModal = false" @saved="onAddressSaved" />
     </StorefrontLayout>
 </template>

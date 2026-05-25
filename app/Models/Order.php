@@ -10,7 +10,8 @@ class Order extends Model
         'order_number', 'user_id', 'status', 'fulfillment_type', 'subtotal',
         'shipping_cost', 'discount_amount', 'total_amount', 'shipping_address_snapshot',
         'notes', 'cancelled_at', 'cancelled_reason', 'courier', 'tracking_number',
-        'shipped_at', 'delivered_at'
+        'shipped_at', 'delivered_at', 'expired_at',
+        'payment_method', 'payment_status', 'paid_at',
     ];
 
     protected $casts = [
@@ -18,6 +19,8 @@ class Order extends Model
         'cancelled_at' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'expired_at' => 'datetime',
+        'paid_at' => 'datetime',
     ];
 
     public function user()
