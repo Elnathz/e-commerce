@@ -91,7 +91,8 @@ class CheckoutController extends Controller
             'cartItems' => $mappedItems,
             'subtotal' => $subtotal,
             'totalWeight' => $totalWeight,
-            'rajaongkirKeyExists' => !empty(config('services.rajaongkir.key'))
+            'rajaongkirKeyExists' => !empty(config('services.rajaongkir.key')),
+            'itemIds' => $itemIds
         ]);
     }
 
@@ -308,6 +309,8 @@ class CheckoutController extends Controller
         }
 
         $apiKey = config('services.rajaongkir.key');
+        $baseUrl = config('services.rajaongkir.base_url', 'https://api.rajaongkir.com/starter');
+        
         if (!$apiKey) {
             return response()->json([
                 'success' => false,
@@ -315,19 +318,73 @@ class CheckoutController extends Controller
             ], 500);
         }
 
-        $response = Http::timeout(15)->withHeaders(['key' => $apiKey])
-            ->post('https://api.rajaongkir.com/starter/cost', [
-                'origin' => $originCityId,
-                'destination' => $destinationCityId,
-                'weight' => $request->weight,
-                'courier' => $request->courier === 'internal' ? 'jne' : $request->courier
-            ]);
+        $isKomerce = str_contains($baseUrl, 'komerce.id');
+        $courier = $request->courier === 'internal' ? 'jne' : $request->courier;
 
-        if ($response->successful()) {
-            return response()->json([
-                'success' => true,
-                'results' => $response->json('rajaongkir.results')
-            ]);
+        if ($isKomerce) {
+            // Komerce API requires x-www-form-urlencoded and POST /calculate/domestic-cost
+            $response = Http::timeout(15)
+                ->asForm()
+                ->withHeaders(['key' => $apiKey])
+                ->post(rtrim($baseUrl, '/') . '/calculate/domestic-cost', [
+                    'origin' => $originCityId,
+                    'destination' => $destinationCityId,
+                    'weight' => $request->weight,
+                    'courier' => $courier
+                ]);
+
+            if ($response->successful()) {
+                $data = $response->json('data') ?: [];
+                
+                // Map Komerce flat response to RajaOngkir nested structure
+                $costs = [];
+                foreach ($data as $item) {
+                    // Extract numeric etd (e.g. "2 day" -> "2")
+                    $etd = isset($item['etd']) ? trim(str_replace(['day', 'days'], '', strtolower($item['etd']))) : '';
+                    
+                    $costs[] = [
+                        'service' => $item['service'] ?? '',
+                        'description' => $item['description'] ?? '',
+                        'cost' => [
+                            [
+                                'value' => $item['cost'] ?? 0,
+                                'etd' => $etd,
+                                'note' => ''
+                            ]
+                        ]
+                    ];
+                }
+
+                $mappedResults = [
+                    [
+                        'code' => $courier,
+                        'name' => count($data) > 0 ? ($data[0]['name'] ?? strtoupper($courier)) : strtoupper($courier),
+                        'costs' => $costs
+                    ]
+                ];
+
+                return response()->json([
+                    'success' => true,
+                    'results' => $mappedResults
+                ]);
+            }
+        } else {
+            // Official RajaOngkir API
+            $response = Http::timeout(15)
+                ->withHeaders(['key' => $apiKey])
+                ->post(rtrim($baseUrl, '/') . '/cost', [
+                    'origin' => $originCityId,
+                    'destination' => $destinationCityId,
+                    'weight' => $request->weight,
+                    'courier' => $courier
+                ]);
+
+            if ($response->successful()) {
+                return response()->json([
+                    'success' => true,
+                    'results' => $response->json('rajaongkir.results')
+                ]);
+            }
         }
 
         return response()->json([

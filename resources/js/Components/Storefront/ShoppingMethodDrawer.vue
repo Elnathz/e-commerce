@@ -8,8 +8,8 @@ const props = defineProps({
 const emit = defineEmits(['close', 'proceed']);
 
 const proceedToCheckout = (method) => {
-    emit('close');
     emit('proceed', method);
+    emit('close');
     
     // Fallback if the parent doesn't handle the routing
     // we just use the router to go to checkout directly.

@@ -41,83 +41,7 @@ const mockSmartphones = [
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
                 </button>
             </div>
-
-            <!-- Grab the best deal on Smartphones -->
-            <section>
-                <div class="flex justify-between items-end border-b pb-2 mb-6">
-                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
-                        Grab the best deal on <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Smartphones</span>
-                    </h2>
-                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
-                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </Link>
-                </div>
-
-                <div class="flex overflow-x-auto gap-4 pb-4 no-scrollbar">
-                    <Link 
-                        v-for="phone in mockSmartphones" 
-                        :key="phone.id"
-                        href="#"
-                        class="min-w-[200px] bg-white border border-gray-100 rounded-xl overflow-hidden hover:shadow-lg transition-all duration-300 relative group flex-shrink-0"
-                    >
-                        <!-- Discount Badge -->
-                        <div class="absolute top-0 right-0 bg-[#008ECC] text-white text-[10px] font-bold px-2 py-3 rounded-bl-xl z-10 flex flex-col items-center leading-none">
-                            <span>{{ phone.discount }}</span>
-                            <span>OFF</span>
-                        </div>
-                        
-                        <div class="p-4 bg-gray-50 flex items-center justify-center h-48 relative overflow-hidden rounded-t-xl">
-                            <!-- Background Accent (Light Blue rounded shape like MegaMart) -->
-                            <div class="absolute inset-0 bg-[#F3F9FB] m-2 rounded-xl"></div>
-                            <img :src="phone.image" :alt="phone.name" class="h-full object-contain relative z-10 drop-shadow-md group-hover:scale-110 transition-transform duration-300" />
-                        </div>
-                        <div class="p-4 bg-white border-t-4 border-[#008ECC]/10 group-hover:border-[#008ECC] transition-colors duration-300 rounded-b-xl">
-                            <h3 class="text-sm font-bold text-gray-800 truncate">{{ phone.name }}</h3>
-                            <div class="mt-2 flex items-center gap-2">
-                                <span class="font-bold text-black">{{ formatPrice(phone.price) }}</span>
-                                <span class="text-xs text-gray-400 line-through">{{ formatPrice(phone.old_price) }}</span>
-                            </div>
-                            <hr class="my-2 border-gray-100" />
-                            <div class="text-xs font-semibold text-green-600">
-                                Save - {{ phone.save }}
-                            </div>
-                        </div>
-                    </Link>
-                </div>
-            </section>
-
-            <!-- Shop From Top Categories -->
-            <section v-if="categories && categories.length > 0">
-                <div class="flex justify-between items-end border-b pb-2 mb-6">
-                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
-                        Shop From <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Top Categories</span>
-                    </h2>
-                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
-                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </Link>
-                </div>
-
-                <div class="space-y-6">
-                    <div v-for="parent in categories" :key="parent.id">
-                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{ parent.name }}</h3>
-                        <div class="flex flex-wrap gap-6 md:gap-8">
-                            <Link 
-                                v-for="child in parent.children" 
-                                :key="child.id"
-                                :href="`/search?categories[]=${child.id}`"
-                                class="flex flex-col items-center gap-2 w-[90px] md:w-auto"
-                            >
-                                <div class="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-2 group">
-                                    <img v-if="child.image_path" :src="'/storage/' + child.image_path" :alt="child.name" class="w-3/4 h-3/4 object-contain drop-shadow-sm group-hover:scale-[3.2] transition-transform duration-300 scale-[2.9]" />
-                                    <span v-else class="text-gray-400 text-[10px] font-medium uppercase tracking-wide text-center leading-tight">{{ child.name }}</span>
-                                </div>
-                                <span class="text-xs font-semibold text-gray-700 text-center leading-tight">{{ child.name }}</span>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
+            
             <!-- Top Electronics Brands -->
             <section>
                 <div class="flex justify-between items-end border-b pb-2 mb-6">
@@ -158,6 +82,38 @@ const mockSmartphones = [
                             <div class="text-lg font-light">UP to 80% OFF</div>
                         </div>
                         <img src="/images/product/ipon17promaxblue.webp" class="h-28 z-10 drop-shadow-2xl group-hover:scale-110 transition-transform duration-300" alt="Phone" />
+                    </div>
+                </div>
+            </section>
+
+            <!-- Shop From Top Categories -->
+            <section v-if="categories && categories.length > 0">
+                <div class="flex justify-between items-end border-b pb-2 mb-6">
+                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
+                        Shop From <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Top Categories</span>
+                    </h2>
+                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
+                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </Link>
+                </div>
+
+                <div class="space-y-6">
+                    <div v-for="parent in categories" :key="parent.id">
+                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{ parent.name }}</h3>
+                        <div class="flex flex-wrap gap-6 md:gap-8">
+                            <Link 
+                                v-for="child in parent.children" 
+                                :key="child.id"
+                                :href="`/search?categories[]=${child.id}`"
+                                class="flex flex-col items-center gap-2 w-[90px] md:w-auto"
+                            >
+                                <div class="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-2 group">
+                                    <img v-if="child.image_path" :src="'/storage/' + child.image_path" :alt="child.name" class="w-3/4 h-3/4 object-contain drop-shadow-sm group-hover:scale-[3.2] transition-transform duration-300 scale-[2.9]" />
+                                    <span v-else class="text-gray-400 text-[10px] font-medium uppercase tracking-wide text-center leading-tight">{{ child.name }}</span>
+                                </div>
+                                <span class="text-xs font-semibold text-gray-700 text-center leading-tight">{{ child.name }}</span>
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </section>
