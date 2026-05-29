@@ -33,6 +33,23 @@ const handleCheckout = () => {
     showShoppingMethodDrawer.value = true;
 };
 
+const handleProceedCheckout = (method) => {
+    const items = page.props.cartItems || [];
+    const activeItemIds = items
+        .filter(item => item.is_active && item.available_stock > 0)
+        .map(item => item.id);
+        
+    if (activeItemIds.length === 0) {
+        triggerToast('Tidak ada item valid di keranjang untuk checkout.', 'error');
+        return;
+    }
+
+    router.get(route('checkout.index'), {
+        method: method,
+        items: activeItemIds.join(',')
+    });
+};
+
 // Toast notification
 const toastMessage = ref('');
 const toastType = ref('success');
@@ -295,7 +312,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
         <CartDrawer :show="showCartDrawer" @close="showCartDrawer = false" @checkout="handleCheckout" />
 
         <!-- Shopping Method Drawer (Pre-Checkout) -->
-        <ShoppingMethodDrawer :show="showShoppingMethodDrawer" @close="showShoppingMethodDrawer = false" />
+        <ShoppingMethodDrawer :show="showShoppingMethodDrawer" @close="showShoppingMethodDrawer = false" @proceed="handleProceedCheckout" />
 
         <!-- Toast Notification -->
         <Transition
