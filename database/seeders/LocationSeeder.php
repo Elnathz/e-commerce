@@ -3,222 +3,156 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Http;
 use App\Models\Province;
 use App\Models\City;
+use App\Models\District;
+use Illuminate\Support\Facades\DB;
 
 class LocationSeeder extends Seeder
 {
     /**
      * Run the database seeds.
-     * Fetches provinces and cities from RajaOngkir API.
-     * Falls back to hardcoded province data if API is unreachable.
+     * Seeds provinces, cities, and districts from a static offline JSON dataset.
      */
     public function run(): void
     {
-        $apiKey = config('services.rajaongkir.key') ?: env('RAJAONGKIR_API_KEY');
-        $baseUrl = config('services.rajaongkir.base_url', 'https://api.rajaongkir.com/starter');
+        $filePath = base_path('database/data/indonesia_wilayah.json');
 
-        if (!$apiKey) {
-            $this->command->error('RAJAONGKIR_API_KEY is missing. Add it to .env');
+        if (!file_exists($filePath)) {
+            $this->command->error("Offline location data file not found at: {$filePath}");
+            $this->command->info("Please run the generator script first:");
+            $this->command->info("php scratch/generate_full_dataset.php");
             return;
         }
 
-        // === SEED PROVINCES ===
-        $provincesSeeded = $this->seedProvinces($apiKey, $baseUrl);
+        $this->command->info('Loading offline location data from JSON...');
+        $data = json_decode(file_get_contents($filePath), true);
 
-        if (!$provincesSeeded) {
-            $this->command->warn('API failed. Using hardcoded Indonesian provinces.');
-            $this->seedHardcodedProvinces();
-            $provincesSeeded = true;
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $this->command->error('Failed to parse JSON file: ' . json_last_error_msg());
+            return;
         }
 
-        // === SEED CITIES ===
-        if ($provincesSeeded) {
-            $citiesSeeded = $this->seedCities($apiKey, $baseUrl);
+        $provincesJson = $data['provinces'] ?? [];
+        $citiesJson = $data['cities'] ?? [];
+        $districtsJson = $data['districts'] ?? [];
 
-            if (!$citiesSeeded) {
-                $this->command->warn('Cities API also failed. Cities will need to be seeded later when API is available.');
-                $this->command->info('Run: php artisan db:seed --class=LocationSeeder');
-            }
-        }
-    }
+        $this->command->info("Found: " . count($provincesJson) . " provinces, " . count($citiesJson) . " cities, " . count($districtsJson) . " districts.");
 
-    private function seedProvinces(string $apiKey, string $baseUrl): bool
-    {
-        $this->command->info('Fetching provinces from RajaOngkir/Komerce API...');
-        $isKomerce = str_contains($baseUrl, 'komerce.id');
+        // === 1. SEED PROVINCES ===
+        $this->command->info('Seeding provinces...');
+        $provMap = []; // Maps rajaongkir_province_id -> internal Province ID
 
-        try {
-            $url = $isKomerce 
-                ? rtrim($baseUrl, '/') . '/destination/province'
-                : rtrim($baseUrl, '/') . '/province';
+        DB::transaction(function () use ($provincesJson, &$provMap) {
+            foreach ($provincesJson as $p) {
+                // Use rajaongkir_province_id as the primary lookup key
+                $lookupKey = $p['rajaongkir_province_id'] ?? $p['komerce_province_id'] ?? null;
+                if (!$lookupKey) continue;
 
-            $response = Http::retry(3, 2000)
-                ->timeout(15)
-                ->withHeaders(['key' => $apiKey])
-                ->get($url);
+                $province = Province::updateOrCreate(
+                    ['rajaongkir_province_id' => $p['rajaongkir_province_id']],
+                    [
+                        'name' => $p['name'],
+                        'komerce_province_id' => $p['komerce_province_id'] ?? null,
+                    ]
+                );
 
-            if ($response->successful()) {
-                $provinces = $isKomerce ? $response->json('data') : $response->json('rajaongkir.results');
-
-                if (!empty($provinces)) {
-                    foreach ($provinces as $province) {
-                        $provId = $isKomerce ? $province['id'] : $province['province_id'];
-                        $provName = $isKomerce ? $province['name'] : $province['province'];
-
-                        Province::updateOrCreate(
-                            ['id' => $provId],
-                            ['name' => $provName]
-                        );
-                    }
-                    $this->command->info('✓ Provinces seeded from API: ' . count($provinces) . ' rows.');
-                    return true;
+                // Map both rajaongkir and komerce province IDs to internal ID
+                if ($p['rajaongkir_province_id']) {
+                    $provMap['ro_' . $p['rajaongkir_province_id']] = $province->id;
+                }
+                if (!empty($p['komerce_province_id'])) {
+                    $provMap['ko_' . $p['komerce_province_id']] = $province->id;
                 }
             }
+        });
+        $this->command->info('✓ Provinces seeded: ' . Province::count());
 
-            $this->command->error('API returned non-success: ' . $response->status());
-            return false;
-        } catch (\Exception $e) {
-            $this->command->error('API connection failed: ' . $e->getMessage());
-            return false;
-        }
-    }
+        // === 2. SEED CITIES (CHUNKED FOR PERFORMANCE) ===
+        $this->command->info('Seeding cities...');
+        $cityMap = []; // Maps rajaongkir_city_id -> internal City ID
 
-    private function seedCities(string $apiKey, string $baseUrl): bool
-    {
-        $this->command->info('Fetching cities from RajaOngkir/Komerce API...');
-        $isKomerce = str_contains($baseUrl, 'komerce.id');
-
-        try {
-            if ($isKomerce) {
-                // Komerce does not have a bulk fetch all cities endpoint.
-                // We must iterate over existing provinces in the database and fetch cities for each.
-                $provinces = Province::all();
-                if ($provinces->isEmpty()) {
-                    $this->command->error('No provinces in database. Seed provinces first.');
-                    return false;
-                }
-
-                $totalCitiesCount = 0;
-                $this->command->info('Komerce API detected: Fetching cities for ' . $provinces->count() . ' provinces sequentially...');
+        DB::transaction(function () use ($citiesJson, $provMap, &$cityMap) {
+            foreach ($citiesJson as $c) {
+                // Resolve province: try rajaongkir first, then komerce
+                $internalProvId = $provMap['ro_' . ($c['rajaongkir_province_id'] ?? '')] 
+                    ?? $provMap['ko_' . ($c['komerce_province_id'] ?? '')] 
+                    ?? null;
                 
-                foreach ($provinces as $province) {
-                    $this->command->comment("Fetching cities for province: {$province->name}...");
-                    
-                    $url = rtrim($baseUrl, '/') . '/destination/city/' . $province->id;
-                    $response = Http::retry(2, 1000)
-                        ->timeout(15)
-                        ->withHeaders(['key' => $apiKey])
-                        ->get($url);
-
-                    if ($response->successful()) {
-                        $cities = $response->json('data') ?: [];
-                        foreach ($cities as $city) {
-                            City::updateOrCreate(
-                                ['id' => $city['id']],
-                                [
-                                    'province_id' => $province->id,
-                                    'name' => $city['name'],
-                                    'type' => $city['type'] ?? '',
-                                    'postal_code' => $city['postal_code'] ?? null
-                                ]
-                            );
-                            $totalCitiesCount++;
-                        }
-                    } else {
-                        $this->command->error("Failed to fetch cities for province {$province->name}: Code " . $response->status());
-                    }
-                }
-                
-                $this->command->info("✓ Cities seeded from Komerce API: {$totalCitiesCount} rows.");
-                return true;
-            } else {
-                // Official RajaOngkir API (bulk fetch)
-                $response = Http::retry(3, 2000)
-                    ->timeout(30)
-                    ->withHeaders(['key' => $apiKey])
-                    ->get(rtrim($baseUrl, '/') . '/city');
-
-                if ($response->successful()) {
-                    $cities = $response->json('rajaongkir.results');
-
-                    if (!empty($cities)) {
-                        foreach ($cities as $city) {
-                            City::updateOrCreate(
-                                ['id' => $city['city_id']],
-                                [
-                                    'province_id' => $city['province_id'],
-                                    'name' => $city['city_name'],
-                                    'type' => $city['type'],
-                                    'postal_code' => $city['postal_code']
-                                ]
-                            );
-                        }
-                        $this->command->info('✓ Cities seeded from API: ' . count($cities) . ' rows.');
-                        return true;
-                    }
+                if (!$internalProvId) {
+                    continue; // Skip if parent province is not seeded
                 }
 
-                $this->command->error('Cities API returned non-success: ' . $response->status());
-                return false;
+                $lookupField = !empty($c['rajaongkir_city_id']) ? 'rajaongkir_city_id' : 'komerce_city_id';
+                $lookupValue = $c[$lookupField];
+
+                $city = City::updateOrCreate(
+                    [$lookupField => $lookupValue],
+                    [
+                        'province_id' => $internalProvId,
+                        'name' => $c['name'],
+                        'type' => $c['type'],
+                        'postal_code' => $c['postal_code'],
+                        'rajaongkir_city_id' => $c['rajaongkir_city_id'] ?? null,
+                        'komerce_city_id' => $c['komerce_city_id'] ?? null,
+                    ]
+                );
+
+                // Map both IDs to internal ID
+                if (!empty($c['rajaongkir_city_id'])) {
+                    $cityMap['ro_' . $c['rajaongkir_city_id']] = $city->id;
+                }
+                if (!empty($c['komerce_city_id'])) {
+                    $cityMap['ko_' . $c['komerce_city_id']] = $city->id;
+                }
             }
-        } catch (\Exception $e) {
-            $this->command->error('Cities API connection failed: ' . $e->getMessage());
-            return false;
-        }
-    }
+        });
+        $this->command->info('✓ Cities seeded: ' . City::count());
 
-    /**
-     * Hardcoded 34 provinces of Indonesia with RajaOngkir IDs.
-     * Used as fallback when API is unreachable.
-     */
-    private function seedHardcodedProvinces(): void
-    {
-        $provinces = [
-            ['id' => 1,  'name' => 'Bali'],
-            ['id' => 2,  'name' => 'Bangka Belitung'],
-            ['id' => 3,  'name' => 'Banten'],
-            ['id' => 4,  'name' => 'Bengkulu'],
-            ['id' => 5,  'name' => 'DI Yogyakarta'],
-            ['id' => 6,  'name' => 'DKI Jakarta'],
-            ['id' => 7,  'name' => 'Gorontalo'],
-            ['id' => 8,  'name' => 'Jambi'],
-            ['id' => 9,  'name' => 'Jawa Barat'],
-            ['id' => 10, 'name' => 'Jawa Tengah'],
-            ['id' => 11, 'name' => 'Jawa Timur'],
-            ['id' => 12, 'name' => 'Kalimantan Barat'],
-            ['id' => 13, 'name' => 'Kalimantan Selatan'],
-            ['id' => 14, 'name' => 'Kalimantan Tengah'],
-            ['id' => 15, 'name' => 'Kalimantan Timur'],
-            ['id' => 16, 'name' => 'Kalimantan Utara'],
-            ['id' => 17, 'name' => 'Kepulauan Riau'],
-            ['id' => 18, 'name' => 'Lampung'],
-            ['id' => 19, 'name' => 'Maluku'],
-            ['id' => 20, 'name' => 'Maluku Utara'],
-            ['id' => 21, 'name' => 'Nanggroe Aceh Darussalam (NAD)'],
-            ['id' => 22, 'name' => 'Nusa Tenggara Barat (NTB)'],
-            ['id' => 23, 'name' => 'Nusa Tenggara Timur (NTT)'],
-            ['id' => 24, 'name' => 'Papua'],
-            ['id' => 25, 'name' => 'Papua Barat'],
-            ['id' => 26, 'name' => 'Riau'],
-            ['id' => 27, 'name' => 'Sulawesi Barat'],
-            ['id' => 28, 'name' => 'Sulawesi Selatan'],
-            ['id' => 29, 'name' => 'Sulawesi Tengah'],
-            ['id' => 30, 'name' => 'Sulawesi Tenggara'],
-            ['id' => 31, 'name' => 'Sulawesi Utara'],
-            ['id' => 32, 'name' => 'Sumatera Barat'],
-            ['id' => 33, 'name' => 'Sumatera Selatan'],
-            ['id' => 34, 'name' => 'Sumatera Utara'],
-        ];
+        // === 3. SEED DISTRICTS (BULK INSERT WITH CHUNKS FOR SPEED) ===
+        $this->command->info('Seeding districts in chunks...');
+        
+        // Truncate districts first to avoid duplicate keys on re-seed
+        DB::table('districts')->delete();
 
-        foreach ($provinces as $province) {
-            Province::updateOrCreate(
-                ['id' => $province['id']],
-                ['name' => $province['name']]
-            );
+        $chunkSize = 1000;
+        $insertData = [];
+        $now = now();
+        $skipped = 0;
+
+        foreach ($districtsJson as $d) {
+            // Resolve city: try rajaongkir first, then komerce
+            $internalCityId = $cityMap['ro_' . ($d['rajaongkir_city_id'] ?? '')] 
+                ?? $cityMap['ko_' . ($d['komerce_city_id'] ?? '')] 
+                ?? null;
+
+            if (!$internalCityId) {
+                $skipped++;
+                continue; // Skip if parent city is not seeded
+            }
+
+            $insertData[] = [
+                'city_id' => $internalCityId,
+                'name' => $d['name'],
+                'rajaongkir_district_id' => $d['rajaongkir_district_id'] ?? null,
+                'komerce_district_id' => $d['komerce_district_id'] ?? null,
+                'created_at' => $now,
+                'updated_at' => $now
+            ];
+
+            if (count($insertData) >= $chunkSize) {
+                DB::table('districts')->insert($insertData);
+                $insertData = [];
+            }
         }
 
-        $this->command->info('✓ Hardcoded provinces seeded: ' . count($provinces) . ' rows.');
+        // Insert remaining districts
+        if (count($insertData) > 0) {
+            DB::table('districts')->insert($insertData);
+        }
+
+        $this->command->info('✓ Districts seeded: ' . District::count() . " (skipped: $skipped)");
+        $this->command->info('');
+        $this->command->info('=== Location seeding complete ===');
     }
 }

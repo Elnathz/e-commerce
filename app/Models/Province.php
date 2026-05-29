@@ -6,8 +6,12 @@ use Illuminate\Database\Eloquent\Model;
 
 class Province extends Model
 {
-    public $incrementing = false;
-    protected $fillable = ['id', 'name'];
+    protected $fillable = [
+        'name',
+        'rajaongkir_province_id',
+        'komerce_province_id',
+        'binderbyte_province_id'
+    ];
 
     public function cities()
     {

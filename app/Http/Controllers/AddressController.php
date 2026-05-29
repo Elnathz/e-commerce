@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\UserAddress;
 use App\Models\Province;
 use App\Models\City;
+use App\Models\District;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -20,25 +21,48 @@ class AddressController extends Controller
         return response()->json(City::where('province_id', $province_id)->orderBy('name')->get());
     }
 
+    public function getDistricts($city_id)
+    {
+        // All districts are seeded locally from the master dataset.
+        // No JIT API fetching needed.
+        $districts = District::where('city_id', $city_id)->orderBy('name')->get();
+        return response()->json($districts);
+    }
+
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $request->validate([
             'label' => 'required|string|max:100',
             'recipient_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
-            'province' => 'required|string|max:100',
-            'city' => 'required|string|max:100',
-            'city_id' => 'required|string|max:20',
-            'district' => 'nullable|string|max:100',
+            'city_id' => 'required|exists:cities,id',
+            'district_id' => 'required|exists:districts,id',
             'postal_code' => 'nullable|string|max:10',
             'address_detail' => 'required|string',
             'is_default' => 'boolean',
         ]);
 
+        $cityModel = City::with('province')->findOrFail($request->city_id);
+        $districtModel = District::findOrFail($request->district_id);
+
+        $validated = [
+            'label' => $request->label,
+            'recipient_name' => $request->recipient_name,
+            'phone' => $request->phone,
+            'province' => $cityModel->province->name,
+            'city' => $cityModel->type . ' ' . $cityModel->name,
+            'city_id' => $cityModel->id,
+            'district' => $districtModel->name,
+            'district_id' => $districtModel->id,
+            'postal_code' => $cityModel->postal_code ?: $request->postal_code,
+            'address_detail' => $request->address_detail,
+            'is_default' => $request->is_default ?? false,
+        ];
+
         $user = Auth::user();
 
         // If it's the first address or set as default, update others
-        if ($validated['is_default'] ?? false || $user->addresses()->count() === 0) {
+        if ($validated['is_default'] || $user->addresses()->count() === 0) {
             $validated['is_default'] = true;
             $user->addresses()->update(['is_default' => false]);
         } else {
@@ -56,20 +80,35 @@ class AddressController extends Controller
             abort(403);
         }
 
-        $validated = $request->validate([
+        $request->validate([
             'label' => 'required|string|max:100',
             'recipient_name' => 'required|string|max:255',
             'phone' => 'required|string|max:20',
-            'province' => 'required|string|max:100',
-            'city' => 'required|string|max:100',
-            'city_id' => 'required|string|max:20',
-            'district' => 'nullable|string|max:100',
+            'city_id' => 'required|exists:cities,id',
+            'district_id' => 'required|exists:districts,id',
             'postal_code' => 'nullable|string|max:10',
             'address_detail' => 'required|string',
             'is_default' => 'boolean',
         ]);
 
-        if ($validated['is_default'] ?? false) {
+        $cityModel = City::with('province')->findOrFail($request->city_id);
+        $districtModel = District::findOrFail($request->district_id);
+
+        $validated = [
+            'label' => $request->label,
+            'recipient_name' => $request->recipient_name,
+            'phone' => $request->phone,
+            'province' => $cityModel->province->name,
+            'city' => $cityModel->type . ' ' . $cityModel->name,
+            'city_id' => $cityModel->id,
+            'district' => $districtModel->name,
+            'district_id' => $districtModel->id,
+            'postal_code' => $cityModel->postal_code ?: $request->postal_code,
+            'address_detail' => $request->address_detail,
+            'is_default' => $request->is_default ?? false,
+        ];
+
+        if ($validated['is_default']) {
             Auth::user()->addresses()->where('id', '!=', $address->id)->update(['is_default' => false]);
         }
 

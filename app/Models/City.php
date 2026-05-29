@@ -6,11 +6,23 @@ use Illuminate\Database\Eloquent\Model;
 
 class City extends Model
 {
-    public $incrementing = false;
-    protected $fillable = ['id', 'province_id', 'name', 'type', 'postal_code'];
+    protected $fillable = [
+        'province_id',
+        'name',
+        'type',
+        'postal_code',
+        'rajaongkir_city_id',
+        'komerce_city_id',
+        'binderbyte_city_id'
+    ];
 
     public function province()
     {
         return $this->belongsTo(Province::class);
+    }
+
+    public function districts()
+    {
+        return $this->hasMany(District::class);
     }
 }
