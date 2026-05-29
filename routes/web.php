@@ -21,6 +21,7 @@ Route::delete('/cart/items/{cartItem}', [CartController::class, 'removeItem'])->
 // Address API (for form options)
 Route::get('/api/provinces', [\App\Http\Controllers\AddressController::class, 'getProvinces'])->name('api.provinces');
 Route::get('/api/cities/{province_id}', [\App\Http\Controllers\AddressController::class, 'getCities'])->name('api.cities');
+Route::get('/api/districts/{city_id}', [\App\Http\Controllers\AddressController::class, 'getDistricts'])->name('api.districts');
 
 // Checkout API
 Route::post('/checkout/shipping-cost', [\App\Http\Controllers\CheckoutController::class, 'calculateShipping'])->name('checkout.shippingCost');

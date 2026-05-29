@@ -271,120 +271,91 @@ class CheckoutController extends Controller
     /**
      * Calculate shipping cost based on destination and weight
      */
-    public function calculateShipping(Request $request)
+    public function calculateShipping(Request $request, \App\Services\Shipping\ShippingService $shippingService)
     {
         $request->validate([
-            'destination_city' => 'required',
+            'destination_city' => 'required|exists:cities,id',
             'weight' => 'required|numeric|min:1',
             'courier' => 'required|in:jne,pos,tiki,internal'
         ]);
 
-        $originCityId = 399; // ID Kota Semarang (default store location)
-        $destinationCityId = $request->destination_city;
-
-        // If destination is Semarang, offer internal courier
-        if ($destinationCityId == $originCityId) {
-            return response()->json([
-                'success' => true,
-                'results' => [
-                    [
-                        'code' => 'internal',
-                        'name' => 'Kurir Internal MegaMart',
-                        'costs' => [
-                            [
-                                'service' => 'Same Day',
-                                'description' => 'Pengiriman Langsung Area Semarang',
-                                'cost' => [
-                                    [
-                                        'value' => 15000,
-                                        'etd' => 'Hari ini',
-                                        'note' => ''
+        $destinationCity = \App\Models\City::findOrFail($request->destination_city);
+        
+        // Find internal Semarang City ID dynamically
+        $originCity = \App\Models\City::where('name', 'like', '%semarang%')->first();
+        
+        // If courier is internal, return the flat rate for Semarang
+        if ($request->courier === 'internal') {
+            if ($originCity && $destinationCity->id === $originCity->id) {
+                return response()->json([
+                    'success' => true,
+                    'results' => [
+                        [
+                            'code' => 'internal',
+                            'name' => 'Kurir Internal MegaMart',
+                            'costs' => [
+                                [
+                                    'service' => 'Same Day',
+                                    'description' => 'Pengiriman Langsung Area Semarang',
+                                    'cost' => [
+                                        [
+                                            'value' => 15000,
+                                            'etd' => 'Hari ini',
+                                            'note' => ''
+                                        ]
                                     ]
                                 ]
                             ]
                         ]
                     ]
-                ]
-            ]);
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Kurir internal hanya tersedia untuk pengiriman dalam kota Semarang.'
+                ], 400);
+            }
         }
 
-        $apiKey = config('services.rajaongkir.key');
         $baseUrl = config('services.rajaongkir.base_url', 'https://api.rajaongkir.com/starter');
-        
-        if (!$apiKey) {
+        $isKomerce = str_contains($baseUrl, 'komerce.id');
+
+        // Resolve provider-specific origin and destination IDs
+        // Use provider-specific ID first, fallback to rajaongkir_city_id
+        if ($originCity) {
+            $providerOriginId = ($isKomerce && $originCity->komerce_city_id) 
+                ? $originCity->komerce_city_id 
+                : $originCity->rajaongkir_city_id;
+        } else {
+            $providerOriginId = $isKomerce ? 560 : 399; // Semarang fallback
+        }
+
+        $providerDestinationId = ($isKomerce && $destinationCity->komerce_city_id)
+            ? $destinationCity->komerce_city_id
+            : $destinationCity->rajaongkir_city_id;
+
+        if (!$providerOriginId || !$providerDestinationId) {
             return response()->json([
                 'success' => false,
-                'message' => 'API Key RajaOngkir belum dikonfigurasi'
-            ], 500);
+                'message' => 'Wilayah asal atau tujuan tidak memiliki ID yang valid. Hubungi admin.'
+            ], 400);
         }
 
-        $isKomerce = str_contains($baseUrl, 'komerce.id');
         $courier = $request->courier === 'internal' ? 'jne' : $request->courier;
 
-        if ($isKomerce) {
-            // Komerce API requires x-www-form-urlencoded and POST /calculate/domestic-cost
-            $response = Http::timeout(15)
-                ->asForm()
-                ->withHeaders(['key' => $apiKey])
-                ->post(rtrim($baseUrl, '/') . '/calculate/domestic-cost', [
-                    'origin' => $originCityId,
-                    'destination' => $destinationCityId,
-                    'weight' => $request->weight,
-                    'courier' => $courier
-                ]);
+        // Use ShippingService (with internal caching)
+        $results = $shippingService->getShippingCosts(
+            (int)$providerOriginId,
+            (int)$providerDestinationId,
+            (int)$request->weight,
+            $courier
+        );
 
-            if ($response->successful()) {
-                $data = $response->json('data') ?: [];
-                
-                // Map Komerce flat response to RajaOngkir nested structure
-                $costs = [];
-                foreach ($data as $item) {
-                    // Extract numeric etd (e.g. "2 day" -> "2")
-                    $etd = isset($item['etd']) ? trim(str_replace(['day', 'days'], '', strtolower($item['etd']))) : '';
-                    
-                    $costs[] = [
-                        'service' => $item['service'] ?? '',
-                        'description' => $item['description'] ?? '',
-                        'cost' => [
-                            [
-                                'value' => $item['cost'] ?? 0,
-                                'etd' => $etd,
-                                'note' => ''
-                            ]
-                        ]
-                    ];
-                }
-
-                $mappedResults = [
-                    [
-                        'code' => $courier,
-                        'name' => count($data) > 0 ? ($data[0]['name'] ?? strtoupper($courier)) : strtoupper($courier),
-                        'costs' => $costs
-                    ]
-                ];
-
-                return response()->json([
-                    'success' => true,
-                    'results' => $mappedResults
-                ]);
-            }
-        } else {
-            // Official RajaOngkir API
-            $response = Http::timeout(15)
-                ->withHeaders(['key' => $apiKey])
-                ->post(rtrim($baseUrl, '/') . '/cost', [
-                    'origin' => $originCityId,
-                    'destination' => $destinationCityId,
-                    'weight' => $request->weight,
-                    'courier' => $courier
-                ]);
-
-            if ($response->successful()) {
-                return response()->json([
-                    'success' => true,
-                    'results' => $response->json('rajaongkir.results')
-                ]);
-            }
+        if (!empty($results)) {
+            return response()->json([
+                'success' => true,
+                'results' => $results
+            ]);
         }
 
         return response()->json([
@@ -393,3 +364,4 @@ class CheckoutController extends Controller
         ], 500);
     }
 }
+

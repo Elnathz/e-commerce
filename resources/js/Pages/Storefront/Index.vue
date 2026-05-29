@@ -13,14 +13,6 @@ const formatPrice = (price) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
 };
 
-// Mock data for Smartphones section
-const mockSmartphones = [
-    { id: 1, name: 'iPhone 17 Pro Max Blue', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxblue.webp' },
-    { id: 2, name: 'iPhone 17 Pro Max Orange', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxorange.webp' },
-    { id: 3, name: 'iPhone 17 Pro Max White', price: 25000000, old_price: 27000000, discount: '7%', save: 'Rp2.000.000', image: '/images/product/ipon17promaxwhite.webp' },
-    { id: 4, name: 'iPhone 17 Black', price: 15000000, old_price: 17000000, discount: '11%', save: 'Rp2.000.000', image: '/images/product/ipon17black.webp' },
-    { id: 5, name: 'iPhone 17 White', price: 15000000, old_price: 17000000, discount: '11%', save: 'Rp2.000.000', image: '/images/product/ipon17white.webp' },
-];
 </script>
 
 <template>

@@ -51,6 +51,11 @@ const selectedAddress = computed(() => {
     return props.addresses.find(a => a.id === selectedAddressId.value) || props.addresses.find(a => a.is_default) || props.addresses[0];
 });
 
+const isInternalCourierAvailable = computed(() => {
+    if (!selectedAddress.value) return false;
+    return selectedAddress.value.city && selectedAddress.value.city.toLowerCase().includes('semarang');
+});
+
 // Check for out-of-stock items
 const outOfStockItems = computed(() => {
     return props.cartItems.filter(item => item.available_stock < item.quantity);
@@ -70,6 +75,10 @@ onMounted(() => {
 // Watch for address or courier change to recalculate shipping
 watch([selectedAddressId, selectedCourier], () => {
     if (props.method === 'delivery') {
+        if (selectedCourier.value === 'internal' && !isInternalCourierAvailable.value) {
+            selectedCourier.value = 'jne'; // fallback
+            return;
+        }
         form.address_id = selectedAddressId.value;
         calculateShipping();
     }
@@ -235,18 +244,25 @@ const onAddressSaved = () => {
                             <!-- Courier Selector -->
                             <div class="mb-4">
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">Pilih Kurir</label>
-                                <div class="flex gap-3">
-                                    <label class="flex-1 cursor-pointer">
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                    <label class="cursor-pointer">
                                         <input type="radio" value="jne" v-model="selectedCourier" class="peer sr-only">
-                                        <div class="p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">JNE</div>
+                                        <div class="h-full flex items-center justify-center p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">JNE</div>
                                     </label>
-                                    <label class="flex-1 cursor-pointer">
+                                    <label class="cursor-pointer">
                                         <input type="radio" value="pos" v-model="selectedCourier" class="peer sr-only">
-                                        <div class="p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">POS</div>
+                                        <div class="h-full flex items-center justify-center p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">POS</div>
                                     </label>
-                                    <label class="flex-1 cursor-pointer">
+                                    <label class="cursor-pointer">
                                         <input type="radio" value="tiki" v-model="selectedCourier" class="peer sr-only">
-                                        <div class="p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">TIKI</div>
+                                        <div class="h-full flex items-center justify-center p-3 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">TIKI</div>
+                                    </label>
+                                    <label v-if="isInternalCourierAvailable" class="cursor-pointer">
+                                        <input type="radio" value="internal" v-model="selectedCourier" class="peer sr-only">
+                                        <div class="h-full flex flex-col items-center justify-center p-2 text-center rounded-xl border-2 peer-checked:border-blue-600 peer-checked:bg-blue-50 border-gray-100 hover:border-blue-200 font-bold text-gray-700 peer-checked:text-blue-700 transition-colors">
+                                            <span>Internal</span>
+                                            <span class="text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 mt-0.5 rounded uppercase leading-tight text-center">Semarang</span>
+                                        </div>
                                     </label>
                                 </div>
                             </div>

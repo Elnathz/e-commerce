@@ -11,8 +11,11 @@ const emit = defineEmits(['close', 'saved']);
 
 const provinces = ref([]);
 const cities = ref([]);
+const districts = ref([]);
 const isLoadingProvinces = ref(false);
 const isLoadingCities = ref(false);
+const isLoadingDistricts = ref(false);
+const selectedDistrictId = ref('');
 
 const form = useForm({
     label: '',
@@ -22,6 +25,7 @@ const form = useForm({
     city: '',
     city_id: '',
     district: '',
+    district_id: '',
     postal_code: '',
     address_detail: '',
     is_default: true,
@@ -70,9 +74,14 @@ const onProvinceChange = async (e) => {
     }
 };
 
-const onCityChange = (e) => {
+const onCityChange = async (e) => {
     const cityId = e.target.value;
     selectedCityId.value = cityId;
+    
+    form.district = '';
+    selectedDistrictId.value = '';
+    districts.value = [];
+
     const selectedCity = cities.value.find(c => c.id == cityId);
     if (selectedCity) {
         form.city = `${selectedCity.type} ${selectedCity.name}`;
@@ -81,10 +90,28 @@ const onCityChange = (e) => {
         if (selectedCity.postal_code) {
             form.postal_code = selectedCity.postal_code;
         }
+        
+        isLoadingDistricts.value = true;
+        try {
+            const res = await axios.get(`/api/districts/${cityId}`);
+            districts.value = res.data;
+        } catch (e) {
+            console.error('Failed to load districts', e);
+        } finally {
+            isLoadingDistricts.value = false;
+        }
     } else {
         form.city = '';
         form.city_id = '';
     }
+};
+
+const onDistrictChange = (e) => {
+    const districtId = e.target.value;
+    selectedDistrictId.value = districtId;
+    const selectedDist = districts.value.find(d => d.id == districtId);
+    form.district = selectedDist ? selectedDist.name : '';
+    form.district_id = districtId;
 };
 
 // Province search/filter
@@ -121,7 +148,9 @@ const resetForm = () => {
     form.reset();
     selectedProvinceId.value = '';
     selectedCityId.value = '';
+    selectedDistrictId.value = '';
     cities.value = [];
+    districts.value = [];
     provinceSearch.value = '';
     citySearch.value = '';
 };
@@ -223,9 +252,13 @@ const resetForm = () => {
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Kecamatan</label>
-                            <input v-model="form.district" type="text" placeholder="Contoh: Tembalang, Banyumanik"
-                                class="w-full h-12 px-4 rounded-xl bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-600 transition-all font-medium text-gray-900 text-sm" />
-                            <p class="text-[11px] text-gray-400 mt-1">Ketik nama kecamatan Anda</p>
+                            <select @change="onDistrictChange" :value="selectedDistrictId" :disabled="isLoadingDistricts || !selectedCityId"
+                                class="w-full h-12 px-4 rounded-xl bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-600 transition-all font-medium text-gray-900 text-sm disabled:opacity-50">
+                                <option value="">{{ isLoadingDistricts ? 'Memuat kecamatan...' : (!selectedCityId ? 'Pilih kota dulu' : 'Pilih Kecamatan') }}</option>
+                                <option v-for="dist in districts" :key="dist.id" :value="dist.id">{{ dist.name }}</option>
+                            </select>
+                            <p v-if="districts.length > 0 && !isLoadingDistricts" class="text-[11px] text-gray-400 mt-1">{{ districts.length }} kecamatan ditemukan</p>
+                            <p v-if="form.errors.district || form.errors.district_id" class="text-xs text-red-500 mt-1">{{ form.errors.district || form.errors.district_id }}</p>
                         </div>
                         <div>
                             <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-1.5">Kode Pos</label>
