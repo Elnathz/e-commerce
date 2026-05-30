@@ -40,4 +40,10 @@ return [
         'base_url' => env('RAJAONGKIR_BASE_URL', 'https://api.rajaongkir.com/starter'),
     ],
 
+    'ipaymu' => [
+        'va' => env('IPAYMU_VA'),
+        'api_key' => env('IPAYMU_API_KEY'),
+        'mode' => env('IPAYMU_MODE', 'sandbox'), // 'sandbox' or 'production'
+    ],
+
 ];

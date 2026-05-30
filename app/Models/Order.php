@@ -32,4 +32,36 @@ class Order extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
+
+    /**
+     * All payment attempts for this order (1:N - supports retry)
+     */
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    /**
+     * The latest pending payment (if any)
+     */
+    public function activePayment()
+    {
+        return $this->hasOne(Payment::class)->where('status', 'pending')->latest();
+    }
+
+    /**
+     * Check if order has been paid
+     */
+    public function isPaid(): bool
+    {
+        return $this->payment_status === 'paid';
+    }
+
+    /**
+     * Check if order can be cancelled by customer
+     */
+    public function canBeCancelled(): bool
+    {
+        return $this->status === 'pending' && $this->payment_status !== 'paid';
+    }
 }

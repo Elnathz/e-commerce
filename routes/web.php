@@ -7,6 +7,7 @@ use Inertia\Inertia;
 
 use App\Http\Controllers\StorefrontController;
 use App\Http\Controllers\CartController;
+use App\Http\Controllers\PaymentController;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
 Route::get('/search', [StorefrontController::class, 'search'])->name('search');
@@ -39,6 +40,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/checkout/success/{order_number}', [\App\Http\Controllers\CheckoutController::class, 'success'])->name('checkout.success');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     
+    // Payment routes
+    Route::post('/payments/{order_number}/pay', [PaymentController::class, 'createPayment'])->name('payments.pay');
+    Route::get('/payments/{order_number}/status', [PaymentController::class, 'checkStatus'])->name('payments.status');
+    Route::post('/orders/{order_number}/cancel', [\App\Http\Controllers\CheckoutController::class, 'cancel'])->name('orders.cancel');
+
     // Address management
     Route::resource('addresses', \App\Http\Controllers\AddressController::class)->only(['store', 'update', 'destroy']);
     Route::patch('/addresses/{address}/set-default', [\App\Http\Controllers\AddressController::class, 'setDefault'])->name('addresses.setDefault');
@@ -62,5 +68,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('images/{image}', [\App\Http\Controllers\Admin\ProductImageController::class, 'update'])->name('products.images.update');
     Route::delete('images/{image}', [\App\Http\Controllers\Admin\ProductImageController::class, 'destroy'])->name('products.images.destroy');
 });
+
+// Payment API (public — no auth required)
+Route::get('/api/payment-channels', [PaymentController::class, 'getChannels'])->name('api.paymentChannels');
+Route::post('/api/payments/webhook', [PaymentController::class, 'webhook'])->name('payments.webhook');
 
 require __DIR__.'/auth.php';

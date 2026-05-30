@@ -255,7 +255,7 @@ class CheckoutController extends Controller
     }
 
     /**
-     * Show success page
+     * Show success/payment page — serves as payment hub
      */
     public function success($order_number)
     {
@@ -263,9 +263,61 @@ class CheckoutController extends Controller
             ->where('user_id', Auth::id())
             ->firstOrFail();
 
+        // Get latest payment (pending or final)
+        $activePayment = $order->payments()->latest()->first();
+
         return Inertia::render('Storefront/CheckoutSuccess', [
-            'order' => $order
+            'order' => $order,
+            'activePayment' => $activePayment,
+            'paymentChannels' => \App\Services\Payment\IPaymuService::getAvailableChannels(),
         ]);
+    }
+
+    /**
+     * FR018: Cancel order — releases reserved stock
+     */
+    public function cancel(Request $request, $order_number)
+    {
+        $order = Order::with('items')->where('order_number', $order_number)
+            ->where('user_id', Auth::id())
+            ->firstOrFail();
+
+        if (!$order->canBeCancelled()) {
+            return back()->with('error', 'Pesanan ini tidak dapat dibatalkan.');
+        }
+
+        try {
+            DB::transaction(function () use ($order) {
+                // Lock the order row
+                $order = Order::where('id', $order->id)->lockForUpdate()->first();
+
+                // Release reserved stock
+                foreach ($order->items as $item) {
+                    ProductVariant::where('id', $item->product_variant_id)
+                        ->where('reserved_stock', '>=', $item->quantity)
+                        ->update([
+                            'reserved_stock' => DB::raw('reserved_stock - ' . (int) $item->quantity),
+                        ]);
+                }
+
+                // Cancel any pending payments
+                $order->payments()->where('status', 'pending')->update([
+                    'status' => 'failed',
+                ]);
+
+                // Update order
+                $order->update([
+                    'status' => 'cancelled',
+                    'payment_status' => 'failed',
+                    'cancelled_at' => now(),
+                    'cancelled_reason' => 'Dibatalkan oleh customer',
+                ]);
+            });
+
+            return redirect()->route('home')->with('success', 'Pesanan berhasil dibatalkan.');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Gagal membatalkan pesanan: ' . $e->getMessage());
+        }
     }
 
     /**

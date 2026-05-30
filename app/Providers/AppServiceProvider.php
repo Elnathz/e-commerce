@@ -26,6 +26,10 @@ class AppServiceProvider extends ServiceProvider
                 $app->make(ShippingProviderInterface::class)
             );
         });
+
+        $this->app->singleton(\App\Services\Payment\IPaymuService::class, function ($app) {
+            return new \App\Services\Payment\IPaymuService();
+        });
     }
 
     /**
