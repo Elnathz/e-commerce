@@ -210,6 +210,7 @@ class CheckoutController extends Controller
                     'shipping_address_snapshot' => $addressSnapshot,
                     'notes' => $request->notes,
                     'courier' => $request->method === 'delivery' ? $request->courier : null,
+                    'shipping_service' => $request->method === 'delivery' ? $request->shipping_service : null,
                     'expired_at' => now()->addHours(24), // FR008: 24-hour payment window
                 ]);
 

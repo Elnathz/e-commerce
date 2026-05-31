@@ -45,6 +45,11 @@ Route::middleware('auth')->group(function () {
     Route::get('/payments/{order_number}/status', [PaymentController::class, 'checkStatus'])->name('payments.status');
     Route::post('/orders/{order_number}/cancel', [\App\Http\Controllers\CheckoutController::class, 'cancel'])->name('orders.cancel');
 
+    // Customer Orders
+    Route::get('/orders', [\App\Http\Controllers\OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{order_number}', [\App\Http\Controllers\OrderController::class, 'show'])->name('orders.show');
+    Route::post('/orders/{order_number}/confirm', [\App\Http\Controllers\OrderController::class, 'confirm'])->name('orders.confirm');
+
     // Address management
     Route::resource('addresses', \App\Http\Controllers\AddressController::class)->only(['store', 'update', 'destroy']);
     Route::patch('/addresses/{address}/set-default', [\App\Http\Controllers\AddressController::class, 'setDefault'])->name('addresses.setDefault');
@@ -71,6 +76,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Admin Profile
     Route::get('/profile', [\App\Http\Controllers\Admin\ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [\App\Http\Controllers\Admin\ProfileController::class, 'update'])->name('profile.update');
+
+    // Admin Orders
+    Route::get('orders', [\App\Http\Controllers\Admin\OrderController::class, 'index'])->name('orders.index');
+    Route::get('orders/{order}', [\App\Http\Controllers\Admin\OrderController::class, 'show'])->name('orders.show');
+    Route::post('orders/{order}/process', [\App\Http\Controllers\Admin\OrderController::class, 'process'])->name('orders.process');
+    Route::post('orders/{order}/ship', [\App\Http\Controllers\Admin\OrderController::class, 'ship'])->name('orders.ship');
+    Route::get('orders/{order}/print', [\App\Http\Controllers\Admin\OrderController::class, 'print'])->name('orders.print');
 });
 
 // Payment API (public — no auth required)

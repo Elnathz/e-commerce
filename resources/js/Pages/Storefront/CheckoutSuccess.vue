@@ -188,44 +188,72 @@ const bankIcons = {
     <Head title="Pembayaran Pesanan" />
 
     <StorefrontLayout>
-        <div class="bg-gray-50 py-8 md:py-12 min-h-[70vh] flex items-center justify-center px-4">
-            <div class="bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100 max-w-lg w-full">
+        <div class="bg-gray-50 py-8 md:py-16 min-h-screen flex items-center justify-center px-4">
+            <div :class="[
+                'max-w-lg w-full transition-all duration-300',
+                displayState === 'paid' ? '' : 'bg-white p-6 md:p-8 rounded-3xl shadow-sm border border-gray-100'
+            ]">
 
                 <!-- ===== STATE: PAID ===== -->
                 <template v-if="displayState === 'paid'">
-                    <div class="text-center">
-                        <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6 animate-bounce-in">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-10 h-10 text-green-600">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-                            </svg>
-                        </div>
-                        <h1 class="text-2xl font-bold text-gray-900 mb-2">Pembayaran Berhasil! 🎉</h1>
-                        <p class="text-gray-500 mb-6">Terima kasih, pesanan Anda sedang diproses.</p>
-
-                        <!-- Order Info -->
-                        <div class="bg-gray-50 rounded-2xl p-5 mb-6 text-left border border-gray-100">
-                            <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-200">
-                                <span class="text-sm text-gray-500">Nomor Pesanan</span>
-                                <span class="font-bold text-gray-900 font-mono text-sm">{{ order.order_number }}</span>
+                    <div class="relative overflow-hidden rounded-3xl shadow-2xl bg-white mb-6 border border-gray-100 transform transition-all hover:scale-[1.01] duration-300">
+                        <!-- Header Gradient & Success Icon -->
+                        <div class="bg-gradient-to-br from-emerald-500 via-green-500 to-teal-600 p-8 text-center text-white relative">
+                            <!-- Background decoration -->
+                            <div class="absolute top-0 left-0 w-full h-full overflow-hidden opacity-20 pointer-events-none">
+                                <svg class="absolute -top-10 -right-10 w-40 h-40 text-white" fill="currentColor" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50"/></svg>
+                                <svg class="absolute -bottom-10 -left-10 w-32 h-32 text-white" fill="currentColor" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50"/></svg>
                             </div>
-                            <div class="flex justify-between items-center mb-3 pb-3 border-b border-gray-200">
-                                <span class="text-sm text-gray-500">Status</span>
-                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700">
-                                    <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                                    Lunas
-                                </span>
+                            
+                            <div class="w-24 h-24 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-5 animate-bounce-in shadow-[0_0_30px_rgba(255,255,255,0.3)] border border-white/40">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="white" class="w-12 h-12">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+                                </svg>
                             </div>
-                            <div class="flex justify-between items-center">
-                                <span class="text-sm text-gray-500">Total</span>
-                                <span class="text-lg font-bold text-green-600">{{ formatPrice(order.total_amount) }}</span>
-                            </div>
+                            <h1 class="text-3xl font-black mb-2 tracking-tight">Pembayaran Berhasil</h1>
+                            <p class="text-emerald-50 font-medium">Terima kasih! Pesanan Anda segera diproses.</p>
                         </div>
 
-                        <div class="flex flex-col gap-3">
-                            <Link href="/" class="w-full py-3.5 rounded-xl font-bold bg-blue-600 text-white hover:bg-blue-700 transition-colors text-center">
-                                Kembali ke Beranda
-                            </Link>
+                        <!-- Receipt Body -->
+                        <div class="px-6 md:px-8 py-8 bg-white relative">
+                            <!-- Clean Dashed separator (Receipt effect) -->
+                            <div class="absolute top-0 left-0 w-full flex items-center justify-center -mt-[2px]">
+                                <div class="w-full border-t-[3px] border-dashed border-gray-200/80 mx-8"></div>
+                            </div>
+                            
+                            <div class="mt-2 space-y-5">
+                                <div class="text-center pb-6 border-b border-gray-100">
+                                    <span class="block text-sm text-gray-500 font-semibold mb-1 uppercase tracking-wider">Total Pembayaran</span>
+                                    <span class="text-4xl font-black text-gray-900 tracking-tight">{{ formatPrice(order.total_amount) }}</span>
+                                </div>
+                                
+                                <div class="flex justify-between items-center text-sm pt-2">
+                                    <span class="text-gray-500 font-medium">Nomor Pesanan</span>
+                                    <span class="font-bold text-gray-900 font-mono bg-gray-50 px-2.5 py-1 rounded-lg border border-gray-100">{{ order.order_number }}</span>
+                                </div>
+                                
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-gray-500 font-medium">Metode Pembayaran</span>
+                                    <span class="font-bold text-gray-900">{{ currentPayment?.payment_name || order.payment_method || 'Transfer Bank' }}</span>
+                                </div>
+                                
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-gray-500 font-medium">Waktu Transaksi</span>
+                                    <span class="font-semibold text-gray-800">{{ currentPayment?.paid_at ? new Date(currentPayment.paid_at).toLocaleString('id-ID', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}) : 'Baru saja' }}</span>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="flex flex-col gap-3">
+                        <Link :href="'/orders/' + order.order_number" class="w-full py-4 rounded-2xl font-bold bg-gray-900 text-white hover:bg-black hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 text-center flex items-center justify-center gap-2">
+                            <span>Lihat Detail Pesanan</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" /></svg>
+                        </Link>
+                        <Link href="/" class="w-full py-4 rounded-2xl font-bold bg-white text-gray-700 border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:text-gray-900 transition-all duration-300 text-center">
+                            Belanja Lagi
+                        </Link>
                     </div>
                 </template>
 
@@ -300,9 +328,16 @@ const bankIcons = {
                         </div>
                     </div>
 
-                    <div class="text-center">
+                    <div class="text-center mb-2">
                         <p class="text-xs text-gray-400">Status pembayaran diperbarui otomatis</p>
                     </div>
+
+                    <!-- Cancel -->
+                    <button @click="cancelOrder"
+                        :disabled="isCancelling"
+                        class="w-full py-3 rounded-xl font-semibold text-red-500 border border-red-100 bg-red-50 hover:bg-red-100 transition-colors text-center mt-3 text-sm">
+                        {{ isCancelling ? 'Membatalkan...' : 'Batalkan Pesanan' }}
+                    </button>
                 </template>
 
                 <!-- ===== STATE: SELECT PAYMENT METHOD ===== -->
