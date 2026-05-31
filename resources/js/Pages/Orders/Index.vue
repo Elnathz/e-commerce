@@ -39,6 +39,20 @@ const getStatusClass = (status) => {
 const formatPrice = (price) => {
     return Number(price).toLocaleString('id-ID');
 };
+
+const getPrimaryImage = (item) => {
+    if (!item || !item.product_variant) return null;
+    const variant = item.product_variant;
+    if (variant.images && variant.images.length > 0) {
+        return '/storage/' + variant.images[0].image_path;
+    }
+    const product = variant.product;
+    if (product && product.images && product.images.length > 0) {
+        const primary = product.images.find(img => img.is_primary);
+        return primary ? '/storage/' + primary.image_path : '/storage/' + product.images[0].image_path;
+    }
+    return null;
+};
 </script>
 
 <template>
@@ -103,10 +117,26 @@ const formatPrice = (price) => {
 
                         <!-- Card Body (Summary) -->
                         <div class="p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
-                            <div>
-                                <p class="text-sm text-slate-500 mb-1">Total Belanja</p>
+                            
+                            <!-- Product Summary -->
+                            <div class="flex items-center gap-4 flex-1 w-full" v-if="order.items && order.items.length > 0">
+                                <div class="w-16 h-16 rounded-xl border border-slate-200 bg-slate-50 overflow-hidden flex-shrink-0">
+                                    <img v-if="getPrimaryImage(order.items[0])" :src="getPrimaryImage(order.items[0])" class="w-full h-full object-cover" />
+                                    <div v-else class="w-full h-full flex items-center justify-center text-slate-300 text-xs font-medium">No Img</div>
+                                </div>
+                                <div>
+                                    <h3 class="font-bold text-slate-900 line-clamp-1">{{ order.items[0].product_name_snapshot }}</h3>
+                                    <p class="text-sm text-slate-500">{{ order.items[0].quantity }} barang x Rp {{ formatPrice(order.items[0].unit_price) }}</p>
+                                    <p v-if="order.items.length > 1" class="text-xs font-semibold text-blue-600 mt-1">+ {{ order.items.length - 1 }} barang lainnya</p>
+                                </div>
+                            </div>
+                            <div v-else class="flex-1 text-slate-500 text-sm">Tidak ada detail item</div>
+
+                            <!-- Pricing & Shipping -->
+                            <div class="sm:text-right border-t sm:border-t-0 sm:border-l border-slate-100 sm:border-slate-200 pt-4 sm:pt-0 sm:pl-6 min-w-[140px] w-full sm:w-auto">
+                                <p class="text-sm text-slate-500 mb-0.5">Total Belanja</p>
                                 <p class="text-lg font-bold text-slate-900">Rp {{ formatPrice(order.total_amount) }}</p>
-                                <p class="text-sm text-slate-500 mt-2">Kurir: <span class="uppercase font-semibold text-slate-700">{{ order.courier }}</span></p>
+                                <p v-if="order.courier" class="text-xs text-slate-500 mt-1">Kurir: <span class="uppercase font-bold text-slate-700">{{ order.courier }}</span><span v-if="order.shipping_service"> - {{ order.shipping_service }}</span></p>
                             </div>
                             
                             <div class="w-full sm:w-auto">

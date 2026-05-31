@@ -15,7 +15,9 @@ class OrderController extends Controller
     {
         $status = $request->query('status', 'all');
 
-        $query = Order::where('user_id', auth()->id())->latest();
+        $query = Order::where('user_id', auth()->id())
+            ->with(['items.productVariant.product.images', 'items.productVariant.images'])
+            ->latest();
 
         if ($status !== 'all') {
             $query->where('status', $status);
