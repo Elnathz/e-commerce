@@ -112,7 +112,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h18M3 6h18M3 18h18" /></svg>
                         </button>
                         <Link href="/" class="flex items-center gap-2">
-                            <img src="/images/logo/gemini-svg.svg" alt="MegaMart" class="h-16 w-auto text-blue-600" />
+                            <img src="/images/logo/gemini-svg.svg?v=4" alt="MegaMart" class="w-40 h-auto object-contain" />
                         </Link>
                     </div>
 

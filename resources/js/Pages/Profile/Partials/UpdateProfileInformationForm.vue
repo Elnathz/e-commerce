@@ -19,18 +19,20 @@ const user = usePage().props.auth.user;
 const form = useForm({
     name: user.name,
     email: user.email,
+    phone: user.phone || '',
+    address: user.address || '',
 });
 </script>
 
 <template>
     <section>
         <header>
-            <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
-                Profile Information
+            <h2 class="text-lg font-bold text-slate-900">
+                Informasi Profil
             </h2>
 
-            <p class="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Update your account's profile information and email address.
+            <p class="mt-1 text-sm font-medium text-slate-500">
+                Perbarui detail akun dan alamat email Anda.
             </p>
         </header>
 
@@ -39,12 +41,12 @@ const form = useForm({
             class="mt-6 space-y-6"
         >
             <div>
-                <InputLabel for="name" value="Name" />
+                <InputLabel for="name" value="Nama Lengkap" class="font-bold text-slate-700" />
 
                 <TextInput
                     id="name"
                     type="text"
-                    class="mt-1 block w-full"
+                    class="mt-1 block w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-600 rounded-xl"
                     v-model="form.name"
                     required
                     autofocus
@@ -55,12 +57,12 @@ const form = useForm({
             </div>
 
             <div>
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" value="Alamat Email" class="font-bold text-slate-700" />
 
                 <TextInput
                     id="email"
                     type="email"
-                    class="mt-1 block w-full"
+                    class="mt-1 block w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-600 rounded-xl"
                     v-model="form.email"
                     required
                     autocomplete="username"
@@ -69,29 +71,56 @@ const form = useForm({
                 <InputError class="mt-2" :message="form.errors.email" />
             </div>
 
+            <div>
+                <InputLabel for="phone" value="Nomor Telepon" class="font-bold text-slate-700" />
+
+                <TextInput
+                    id="phone"
+                    type="text"
+                    class="mt-1 block w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-600 rounded-xl"
+                    v-model="form.phone"
+                    autocomplete="tel"
+                />
+
+                <InputError class="mt-2" :message="form.errors.phone" />
+            </div>
+
+            <div>
+                <InputLabel for="address" value="Alamat Lengkap" class="font-bold text-slate-700" />
+
+                <textarea
+                    id="address"
+                    class="mt-1 block w-full bg-slate-50 border-none ring-1 ring-slate-200 focus:ring-2 focus:ring-blue-600 rounded-xl shadow-sm text-slate-900 focus:border-blue-500"
+                    v-model="form.address"
+                    rows="3"
+                ></textarea>
+
+                <InputError class="mt-2" :message="form.errors.address" />
+            </div>
+
             <div v-if="mustVerifyEmail && user.email_verified_at === null">
-                <p class="mt-2 text-sm text-gray-800 dark:text-gray-200">
-                    Your email address is unverified.
+                <p class="mt-2 text-sm text-gray-800">
+                    Email Anda belum terverifikasi.
                     <Link
                         :href="route('verification.send')"
                         method="post"
                         as="button"
-                        class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:text-gray-400 dark:hover:text-gray-100 dark:focus:ring-offset-gray-800"
+                        class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                     >
-                        Click here to re-send the verification email.
+                        Klik di sini untuk mengirim ulang email verifikasi.
                     </Link>
                 </p>
 
                 <div
                     v-show="status === 'verification-link-sent'"
-                    class="mt-2 text-sm font-medium text-green-600 dark:text-green-400"
+                    class="mt-2 text-sm font-medium text-green-600"
                 >
-                    A new verification link has been sent to your email address.
+                    Tautan verifikasi baru telah dikirim ke alamat email Anda.
                 </div>
             </div>
 
             <div class="flex items-center gap-4">
-                <PrimaryButton :disabled="form.processing">Save</PrimaryButton>
+                <PrimaryButton :disabled="form.processing">Simpan</PrimaryButton>
 
                 <Transition
                     enter-active-class="transition ease-in-out"
@@ -101,9 +130,9 @@ const form = useForm({
                 >
                     <p
                         v-if="form.recentlySuccessful"
-                        class="text-sm text-gray-600 dark:text-gray-400"
+                        class="text-sm text-gray-600"
                     >
-                        Saved.
+                        Tersimpan.
                     </p>
                 </Transition>
             </div>

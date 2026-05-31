@@ -16,22 +16,18 @@ defineProps({
 </script>
 
 <template>
-    <Head title="Profile" />
+    <Head title="Profil" />
 
     <StorefrontLayout>
         <template #header>
-            <h2
-                class="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200"
-            >
-                Profile
+            <h2 class="text-xl font-bold leading-tight text-slate-900">
+                Pengaturan Profil
             </h2>
         </template>
 
-        <div class="py-12">
-            <div class="mx-auto max-w-7xl space-y-6 sm:px-6 lg:px-8">
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
+        <div class="py-12 bg-slate-50 min-h-screen">
+            <div class="mx-auto max-w-4xl space-y-8 sm:px-6 lg:px-8">
+                <div class="bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:rounded-2xl sm:p-10">
                     <UpdateProfileInformationForm
                         :must-verify-email="mustVerifyEmail"
                         :status="status"
@@ -39,15 +35,11 @@ defineProps({
                     />
                 </div>
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
+                <div class="bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:rounded-2xl sm:p-10">
                     <UpdatePasswordForm class="max-w-xl" />
                 </div>
 
-                <div
-                    class="bg-white p-4 shadow sm:rounded-lg sm:p-8 dark:bg-gray-800"
-                >
+                <div class="bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:rounded-2xl sm:p-10">
                     <DeleteUserForm class="max-w-xl" />
                 </div>
             </div>

@@ -14,8 +14,8 @@ class CategoryController extends Controller
 {
     public function index()
     {
-        // Urutkan berdasarkan nama secara alfabetis (A-Z) agar lebih masuk akal untuk pengguna awam
-        $categories = Category::with('parent')->orderBy('name', 'asc')->paginate(10);
+        // Ambil kategori utama beserta sub-kategorinya untuk hierarki visual
+        $categories = Category::with('children')->whereNull('parent_id')->orderBy('name', 'asc')->paginate(10);
         return Inertia::render('Admin/Categories/Index', [
             'categories' => $categories
         ]);

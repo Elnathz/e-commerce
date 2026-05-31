@@ -14,7 +14,14 @@ class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with('category')->latest()->paginate(10);
+        // Mengurutkan produk berdasarkan nama kategori terlebih dahulu agar mudah dikelompokkan di frontend
+        $products = Product::select('products.*')
+            ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
+            ->with('category')
+            ->orderBy('categories.name', 'asc')
+            ->orderBy('products.created_at', 'desc')
+            ->paginate(20);
+
         return Inertia::render('Admin/Products/Index', [
             'products' => $products
         ]);
