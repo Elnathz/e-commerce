@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
+import Modal from '@/Components/Modal.vue';
 import axios from 'axios';
 
 const props = defineProps({
@@ -118,9 +119,14 @@ const copyPayCode = () => {
 };
 
 // === Cancel Order ===
-const cancelOrder = () => {
-    if (!confirm('Yakin ingin membatalkan pesanan ini? Tindakan ini tidak dapat dibatalkan.')) return;
+const showCancelConfirmModal = ref(false);
 
+const requestCancelOrder = () => {
+    showCancelConfirmModal.value = true;
+};
+
+const cancelOrder = () => {
+    showCancelConfirmModal.value = false;
     isCancelling.value = true;
     router.post(`/orders/${props.order.order_number}/cancel`, {}, {
         onFinish: () => { isCancelling.value = false; },
@@ -333,7 +339,7 @@ const bankIcons = {
                     </div>
 
                     <!-- Cancel -->
-                    <button @click="cancelOrder"
+                    <button @click="requestCancelOrder"
                         :disabled="isCancelling"
                         class="w-full py-3 rounded-xl font-semibold text-red-500 border border-red-100 bg-red-50 hover:bg-red-100 transition-colors text-center mt-3 text-sm">
                         {{ isCancelling ? 'Membatalkan...' : 'Batalkan Pesanan' }}
@@ -411,7 +417,7 @@ const bankIcons = {
                     </button>
 
                     <!-- Cancel -->
-                    <button @click="cancelOrder"
+                    <button @click="requestCancelOrder"
                         :disabled="isCancelling"
                         class="w-full py-3 rounded-xl font-semibold text-red-500 border border-red-100 bg-red-50 hover:bg-red-100 transition-colors text-center mt-3 text-sm">
                         {{ isCancelling ? 'Membatalkan...' : 'Batalkan Pesanan' }}
@@ -479,6 +485,31 @@ const bankIcons = {
                 </div>
             </div>
         </div>
+
+        <!-- Cancel Order Confirmation Modal -->
+        <Modal :show="showCancelConfirmModal" @close="showCancelConfirmModal = false" maxWidth="md">
+            <div class="p-6 text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-gray-900 mb-2">Batalkan Pesanan?</h3>
+                <p class="text-sm text-gray-500 mb-6">
+                    Apakah Anda yakin ingin membatalkan pesanan ini? Tindakan ini bersifat permanen dan tidak dapat dibatalkan.
+                </p>
+                <div class="flex flex-col sm:flex-row justify-center gap-3">
+                    <button type="button" @click="showCancelConfirmModal = false"
+                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-gray-200 text-gray-700 font-semibold hover:bg-gray-50 transition-colors text-sm">
+                        Batal
+                    </button>
+                    <button type="button" @click="cancelOrder"
+                        class="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold transition-colors text-sm">
+                        Ya, Batalkan Pesanan
+                    </button>
+                </div>
+            </div>
+        </Modal>
     </StorefrontLayout>
 </template>
 

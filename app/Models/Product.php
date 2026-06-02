@@ -14,6 +14,8 @@ class Product extends Model
         'base_price',
         'weight_gram',
         'is_active',
+        'average_rating',
+        'review_count',
     ];
 
     public function category()
@@ -29,5 +31,10 @@ class Product extends Model
     public function images()
     {
         return $this->hasMany(ProductImage::class);
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class);
     }
 }

@@ -10,3 +10,6 @@ Artisan::command('inspire', function () {
 
 // FR016: Auto-cancel expired orders every 15 minutes
 Schedule::command('orders:cancel-expired')->everyFifteenMinutes();
+
+// FR028: Auto-cancel stale orders (stuck > 7 days) daily
+Schedule::command('orders:auto-cancel-stale')->daily();

@@ -43,6 +43,9 @@ class StorefrontController extends Controller
             'images' => function($q) {
                 $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
             },
+            'reviews' => function($q) {
+                $q->where('is_published', true)->latest()->with(['user', 'images']);
+            }
         ])->where('slug', $slug)->where('is_active', true)->firstOrFail();
 
         // Related products from the same category

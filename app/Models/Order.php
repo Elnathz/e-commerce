@@ -64,4 +64,20 @@ class Order extends Model
     {
         return $this->status === 'pending' && $this->payment_status !== 'paid';
     }
+
+    /**
+     * The return request for this order (if any)
+     */
+    public function returnRequest()
+    {
+        return $this->hasOne(ReturnRequest::class, 'order_id');
+    }
+
+    /**
+     * Check if order can be returned by customer
+     */
+    public function canBeReturned(): bool
+    {
+        return in_array($this->status, ['shipped', 'completed']) && !$this->returnRequest()->exists();
+    }
 }

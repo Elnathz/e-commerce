@@ -262,12 +262,12 @@ const onGalleryScroll = () => {
                     <div class="mt-2.5 flex items-center gap-2.5 flex-wrap">
                         <div class="flex items-center gap-1 text-yellow-400">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>
-                            <span class="text-sm font-bold text-gray-900">4.8</span>
+                            <span class="text-sm font-bold text-gray-900">{{ product.average_rating || '0.0' }}</span>
                         </div>
                         <span class="text-gray-300 text-xs">•</span>
-                        <a href="#ulasan" class="text-sm font-medium text-gray-500 hover:text-blue-600 underline-offset-4 hover:underline">124 Ulasan</a>
+                        <a href="#ulasan" class="text-sm font-medium text-gray-500 hover:text-blue-600 underline-offset-4 hover:underline">{{ product.review_count || 0 }} Ulasan</a>
                         <span class="text-gray-300 text-xs">•</span>
-                        <span class="text-sm font-medium text-gray-500">Terjual 500+</span>
+                        <span class="text-sm font-medium text-gray-500">Terjual 0+</span>
                     </div>
 
                     <!-- Price Section -->
@@ -405,61 +405,48 @@ const onGalleryScroll = () => {
             <section id="ulasan" class="mt-12 md:mt-16 border-t border-gray-200 pt-10">
                 <div class="flex items-center justify-between mb-6">
                     <h2 class="text-lg md:text-xl font-bold text-gray-900">Ulasan Pembeli</h2>
-                    <button class="text-sm font-semibold text-blue-600 hover:text-blue-700">Lihat Semua</button>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
                     <!-- Rating Stats -->
                     <div class="flex flex-col items-center justify-center p-6 bg-gray-50 rounded-2xl h-fit">
-                        <div class="text-5xl font-black text-gray-900 mb-2">4.8<span class="text-xl text-gray-500 font-medium">/5</span></div>
+                        <div class="text-5xl font-black text-gray-900 mb-2">{{ product.average_rating || '0.0' }}<span class="text-xl text-gray-500 font-medium">/5</span></div>
                         <div class="flex gap-1 text-yellow-400 mb-2">
-                            <!-- 5 stars -->
-                            <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-6 h-6"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>
+                            <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" :class="['w-6 h-6', i <= (product.average_rating || 0) ? 'text-yellow-400' : 'text-gray-300']"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>
                         </div>
-                        <div class="text-sm text-gray-500">124 ulasan pembeli</div>
-                        
-                        <!-- Mini Progress Bars -->
-                        <div class="w-full mt-6 space-y-2">
-                            <div v-for="star in [5,4,3,2,1]" :key="star" class="flex items-center gap-2 text-sm text-gray-500">
-                                <span>{{ star }}</span>
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-3 h-3 text-yellow-400"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>
-                                <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                                    <div class="h-full bg-yellow-400 rounded-full" :style="{ width: star === 5 ? '80%' : star === 4 ? '15%' : '2%' }"></div>
-                                </div>
-                            </div>
-                        </div>
+                        <div class="text-sm text-gray-500">{{ product.review_count || 0 }} ulasan pembeli</div>
                     </div>
 
                     <!-- Reviews List -->
                     <div class="md:col-span-2 space-y-6">
-                        <!-- Review Item 1 -->
-                        <div class="pb-6 border-b border-gray-100">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm">FA</div>
-                                <div>
-                                    <div class="font-semibold text-gray-900 text-sm">Fulan Ahmad</div>
-                                    <div class="text-xs text-gray-500">Varian: Black • 2 hari yang lalu</div>
-                                </div>
-                            </div>
-                            <div class="flex gap-1 text-yellow-400 mb-3">
-                                <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>
-                            </div>
-                            <p class="text-sm text-gray-700 leading-relaxed">Barang sangat bagus, pengiriman cepat. Packing juga sangat aman pakai bubble wrap tebal. Recommended seller! Bakal beli lagi di sini.</p>
+                        <div v-if="!product.reviews || product.reviews.length === 0" class="text-center py-10 text-gray-500">
+                            Belum ada ulasan untuk produk ini.
                         </div>
-                        <!-- Review Item 2 -->
-                        <div class="">
-                            <div class="flex items-center gap-3 mb-2">
-                                <div class="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center font-bold text-sm">BW</div>
-                                <div>
-                                    <div class="font-semibold text-gray-900 text-sm">Budi Wibowo</div>
-                                    <div class="text-xs text-gray-500">Varian: White • 1 minggu yang lalu</div>
+                        <div v-else class="space-y-6">
+                            <!-- Dynamic Review Items -->
+                            <div v-for="review in product.reviews" :key="review.id" class="pb-6 border-b border-gray-100 last:border-0 last:pb-0">
+                                <div class="flex items-center gap-3 mb-2">
+                                    <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm uppercase">
+                                        {{ review.user.name.substring(0, 2) }}
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-gray-900 text-sm">{{ review.user.name }}</div>
+                                        <div class="text-xs text-gray-500">{{ new Date(review.created_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'}) }}</div>
+                                    </div>
+                                </div>
+                                <div class="flex gap-1 text-yellow-400 mb-3">
+                                    <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" :class="['w-4 h-4', i <= review.rating ? 'text-yellow-400' : 'text-gray-200']">
+                                        <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" />
+                                    </svg>
+                                </div>
+                                <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{{ review.comment }}</p>
+                                
+                                <div class="mt-3 flex flex-wrap gap-2" v-if="review.images && review.images.length > 0">
+                                    <a v-for="img in review.images" :key="img.id" :href="`/storage/${img.image_path}`" target="_blank" class="block w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-gray-200">
+                                        <img :src="`/storage/${img.image_path}`" class="w-full h-full object-cover hover:scale-110 transition-transform duration-300" />
+                                    </a>
                                 </div>
                             </div>
-                            <div class="flex gap-1 text-yellow-400 mb-3">
-                                <svg v-for="i in 4" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" /></svg>
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4 text-gray-300"><path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z" /></svg>
-                            </div>
-                            <p class="text-sm text-gray-700 leading-relaxed">Kualitas sesuai harga, tapi sayang kurirnya agak lambat. Overall oke lah buat harganya.</p>
                         </div>
                     </div>
                 </div>

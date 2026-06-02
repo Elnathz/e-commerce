@@ -50,6 +50,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/{order_number}', [\App\Http\Controllers\OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order_number}/confirm', [\App\Http\Controllers\OrderController::class, 'confirm'])->name('orders.confirm');
 
+    // Reviews
+    Route::post('/orders/{order_number}/reviews', [\App\Http\Controllers\ReviewController::class, 'store'])->name('reviews.store');
+
+    // Returns
+    Route::post('/orders/{order_number}/return', [\App\Http\Controllers\ReturnController::class, 'store'])->name('returns.store');
+    Route::get('/returns/{return_number}', [\App\Http\Controllers\ReturnController::class, 'show'])->name('returns.show');
+    Route::post('/returns/{return_number}/tracking', [\App\Http\Controllers\ReturnController::class, 'submitTracking'])->name('returns.tracking');
+
     // Address management
     Route::resource('addresses', \App\Http\Controllers\AddressController::class)->only(['store', 'update', 'destroy']);
     Route::patch('/addresses/{address}/set-default', [\App\Http\Controllers\AddressController::class, 'setDefault'])->name('addresses.setDefault');
@@ -83,6 +91,18 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('orders/{order}/process', [\App\Http\Controllers\Admin\OrderController::class, 'process'])->name('orders.process');
     Route::post('orders/{order}/ship', [\App\Http\Controllers\Admin\OrderController::class, 'ship'])->name('orders.ship');
     Route::get('orders/{order}/print', [\App\Http\Controllers\Admin\OrderController::class, 'print'])->name('orders.print');
+
+    // Admin Reviews
+    Route::get('reviews', [\App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
+    Route::patch('reviews/{review}/toggle', [\App\Http\Controllers\Admin\ReviewController::class, 'togglePublish'])->name('reviews.toggle');
+
+    // Admin Returns
+    Route::get('returns', [\App\Http\Controllers\Admin\ReturnController::class, 'index'])->name('returns.index');
+    Route::get('returns/{returnRequest}', [\App\Http\Controllers\Admin\ReturnController::class, 'show'])->name('returns.show');
+    Route::post('returns/{returnRequest}/approve', [\App\Http\Controllers\Admin\ReturnController::class, 'approve'])->name('returns.approve');
+    Route::post('returns/{returnRequest}/reject', [\App\Http\Controllers\Admin\ReturnController::class, 'reject'])->name('returns.reject');
+    Route::post('returns/{returnRequest}/receive', [\App\Http\Controllers\Admin\ReturnController::class, 'receive'])->name('returns.receive');
+    Route::post('returns/{returnRequest}/refund', [\App\Http\Controllers\Admin\ReturnController::class, 'processRefund'])->name('returns.refund');
 });
 
 // Payment API (public — no auth required)

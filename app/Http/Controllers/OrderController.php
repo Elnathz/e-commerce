@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use App\Models\Order;
 use Inertia\Inertia;
 
@@ -15,12 +16,31 @@ class OrderController extends Controller
     {
         $status = $request->query('status', 'all');
 
-        $query = Order::where('user_id', auth()->id())
-            ->with(['items.productVariant.product.images', 'items.productVariant.images'])
+        $query = Order::where('user_id', Auth::id())
+            ->with(['items.productVariant.product.images', 'items.productVariant.images', 'returnRequest'])
             ->latest();
 
-        if ($status !== 'all') {
-            $query->where('status', $status);
+        // Helper closure untuk mengecualikan retur aktif
+        $excludeActiveReturns = function ($q) {
+            $q->whereDoesntHave('returnRequest', function ($q) {
+                $q->whereNotIn('status', ['rejected', 'cancelled']);
+            });
+        };
+
+        if ($status === 'pending') {
+            $query->whereIn('status', ['pending', 'waiting']);
+        } elseif ($status === 'processing') {
+            $query->whereIn('status', ['paid', 'processing']);
+        } elseif ($status === 'shipped') {
+            $query->where('status', 'shipped')->where($excludeActiveReturns);
+        } elseif ($status === 'completed') {
+            $query->where('status', 'completed')->where($excludeActiveReturns);
+        } elseif ($status === 'returned') {
+            $query->whereHas('returnRequest', function ($q) {
+                $q->whereNotIn('status', ['rejected', 'cancelled', 'refund_processed']);
+            });
+        } elseif ($status === 'cancelled') {
+            $query->whereIn('status', ['cancelled', 'refunded']);
         }
 
         $orders = $query->paginate(10)->withQueryString();
@@ -36,9 +56,9 @@ class OrderController extends Controller
      */
     public function show($order_number)
     {
-        $order = Order::where('user_id', auth()->id())
+        $order = Order::where('user_id', Auth::id())
             ->where('order_number', $order_number)
-            ->with(['items.productVariant.product', 'payments' => function($q) {
+            ->with(['items.productVariant.product', 'items.review', 'returnRequest', 'payments' => function($q) {
                 $q->latest();
             }])
             ->firstOrFail();
@@ -53,7 +73,7 @@ class OrderController extends Controller
      */
     public function confirm($order_number)
     {
-        $order = Order::where('user_id', auth()->id())
+        $order = Order::where('user_id', Auth::id())
             ->where('order_number', $order_number)
             ->firstOrFail();
 

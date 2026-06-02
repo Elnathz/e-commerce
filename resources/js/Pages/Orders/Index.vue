@@ -11,10 +11,10 @@ const props = defineProps({
 const statuses = [
     { value: 'all', label: 'Semua' },
     { value: 'pending', label: 'Belum Bayar' },
-    { value: 'paid', label: 'Dibayar' },
-    { value: 'processing', label: 'Dikemas' },
+    { value: 'processing', label: 'Diproses' },
     { value: 'shipped', label: 'Dikirim' },
     { value: 'completed', label: 'Selesai' },
+    { value: 'returned', label: 'Retur' },
     { value: 'cancelled', label: 'Dibatalkan' },
 ];
 
@@ -22,17 +22,49 @@ const changeStatus = (status) => {
     router.get(route('orders.index'), { status }, { preserveState: true, replace: true });
 };
 
-const getStatusDisplay = (status) => {
-    const found = statuses.find(s => s.value === status);
-    return found ? found.label : status;
+const getStatusDisplay = (order) => {
+    if (order.status === 'refunded') return 'Pengembalian Selesai';
+    if (order.status === 'cancelled') return 'Dibatalkan';
+    
+    if (order.return_request) {
+        if (order.return_request.status === 'rejected') {
+            return order.status === 'completed' ? 'Selesai' : 'Dikirim';
+        }
+        if (order.return_request.status === 'cancelled') return 'Retur Dibatalkan';
+        
+        switch(order.return_request.status) {
+            case 'submitted': return 'Sedang Diretur';
+            case 'approved': return 'Retur Disetujui';
+            case 'returned': return 'Menunggu Barang Kembali';
+            case 'received': return 'Barang Diterima Admin';
+            case 'refund_processed': return 'Refund Diproses';
+        }
+    }
+
+    if (order.status === 'pending' || order.status === 'waiting') return 'Belum Bayar';
+    if (order.status === 'paid' || order.status === 'processing') return 'Diproses';
+    if (order.status === 'shipped') return 'Dikirim';
+    if (order.status === 'completed') return 'Selesai';
+
+    return order.status;
 };
 
-const getStatusClass = (status) => {
-    if (status === 'pending') return 'bg-yellow-100 text-yellow-800';
-    if (status === 'paid' || status === 'processing') return 'bg-purple-100 text-purple-800';
-    if (status === 'shipped') return 'bg-indigo-100 text-indigo-800';
-    if (status === 'completed') return 'bg-green-100 text-green-800';
-    if (status === 'cancelled' || status === 'refunded') return 'bg-red-100 text-red-800';
+const getStatusClass = (order) => {
+    if (order.status === 'refunded' || order.status === 'cancelled') return 'bg-red-100 text-red-800';
+    
+    if (order.return_request) {
+        if (order.return_request.status === 'rejected') {
+            // Revert to original class, but we could add border if needed
+        } else {
+            return 'bg-orange-100 text-orange-800 border border-orange-300';
+        }
+    }
+
+    if (order.status === 'pending' || order.status === 'waiting') return 'bg-yellow-100 text-yellow-800';
+    if (order.status === 'paid' || order.status === 'processing') return 'bg-purple-100 text-purple-800';
+    if (order.status === 'shipped') return 'bg-indigo-100 text-indigo-800';
+    if (order.status === 'completed') return 'bg-green-100 text-green-800';
+    
     return 'bg-gray-100 text-gray-800';
 };
 
@@ -109,8 +141,8 @@ const getPrimaryImage = (item) => {
                                 <span class="text-sm text-slate-500">{{ new Date(order.created_at).toLocaleString('id-ID') }}</span>
                             </div>
                             <div>
-                                <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide', getStatusClass(order.status)]">
-                                    {{ getStatusDisplay(order.status) }}
+                                <span :class="['px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide', getStatusClass(order)]">
+                                    {{ getStatusDisplay(order) }}
                                 </span>
                             </div>
                         </div>
@@ -128,6 +160,16 @@ const getPrimaryImage = (item) => {
                                     <h3 class="font-bold text-slate-900 line-clamp-1">{{ order.items[0].product_name_snapshot }}</h3>
                                     <p class="text-sm text-slate-500">{{ order.items[0].quantity }} barang x Rp {{ formatPrice(order.items[0].unit_price) }}</p>
                                     <p v-if="order.items.length > 1" class="text-xs font-semibold text-blue-600 mt-1">+ {{ order.items.length - 1 }} barang lainnya</p>
+                                    <p v-if="order.return_request" 
+                                       :class="['text-xs font-bold mt-1.5 flex items-center gap-1.5', order.return_request.status === 'rejected' ? 'text-gray-500' : 'text-orange-600']">
+                                        <svg v-if="order.return_request.status === 'rejected'" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        <svg v-else class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                                        </svg>
+                                        {{ order.return_request.status === 'rejected' ? 'Pernah Diajukan Retur (Ditolak)' : (order.return_request.is_partial ? 'Retur Sebagian' : '1 Pesanan Diretur') }}
+                                    </p>
                                 </div>
                             </div>
                             <div v-else class="flex-1 text-slate-500 text-sm">Tidak ada detail item</div>
@@ -139,7 +181,12 @@ const getPrimaryImage = (item) => {
                                 <p v-if="order.courier" class="text-xs text-slate-500 mt-1">Kurir: <span class="uppercase font-bold text-slate-700">{{ order.courier }}</span><span v-if="order.shipping_service"> - {{ order.shipping_service }}</span></p>
                             </div>
                             
-                            <div class="w-full sm:w-auto">
+                            <div class="w-full sm:w-auto flex flex-col gap-2.5">
+                                <Link v-if="order.return_request" :href="route('returns.show', order.return_request.return_number)">
+                                    <PrimaryButton class="w-full justify-center !bg-orange-50 !text-orange-700 border border-orange-200 hover:!bg-orange-100 !rounded-xl shadow-sm">
+                                        Lihat Status Retur
+                                    </PrimaryButton>
+                                </Link>
                                 <Link :href="route('orders.show', order.order_number)">
                                     <PrimaryButton class="w-full justify-center !bg-white !text-blue-600 border border-blue-600 hover:!bg-blue-50 !rounded-xl shadow-sm">
                                         Lihat Detail Pesanan

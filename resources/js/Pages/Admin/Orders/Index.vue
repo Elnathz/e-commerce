@@ -39,6 +39,14 @@ const getStatusClass = (status) => {
 const formatPrice = (price) => {
     return Number(price).toLocaleString('id-ID');
 };
+
+const isStale = (order) => {
+    const updatedDate = new Date(order.updated_at);
+    const threeDaysAgo = new Date();
+    threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+    
+    return updatedDate < threeDaysAgo;
+};
 </script>
 
 <template>
@@ -99,9 +107,14 @@ const formatPrice = (price) => {
                                         </td>
                                         <td class="px-4 py-3 font-semibold text-slate-700">Rp {{ formatPrice(order.total_amount) }}</td>
                                         <td class="px-4 py-3 text-center">
-                                            <span :class="['px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide', getStatusClass(order.status)]">
+                                            <span :class="['px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mb-1', getStatusClass(order.status)]">
                                                 {{ statuses.find(s => s.value === order.status)?.label || order.status }}
                                             </span>
+                                            <div v-if="(order.status === 'paid' || order.status === 'processing') && isStale(order)" class="mt-1">
+                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-600 text-white shadow-sm animate-pulse">
+                                                    PRIORITAS
+                                                </span>
+                                            </div>
                                         </td>
                                         <td class="px-4 py-3 text-center">
                                             <Link :href="route('admin.orders.show', order.id)" class="text-blue-600 font-bold hover:text-blue-800 hover:underline">
