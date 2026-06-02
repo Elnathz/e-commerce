@@ -94,7 +94,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
     // Admin Reviews
     Route::get('reviews', [\App\Http\Controllers\Admin\ReviewController::class, 'index'])->name('reviews.index');
+    Route::post('reviews/bulk-moderate', [\App\Http\Controllers\Admin\ReviewController::class, 'bulkModerate'])->name('reviews.bulk');
     Route::patch('reviews/{review}/toggle', [\App\Http\Controllers\Admin\ReviewController::class, 'togglePublish'])->name('reviews.toggle');
+    Route::post('reviews/{review}/reply', [\App\Http\Controllers\Admin\ReviewController::class, 'reply'])->name('reviews.reply');
 
     // Admin Returns
     Route::get('returns', [\App\Http\Controllers\Admin\ReturnController::class, 'index'])->name('returns.index');

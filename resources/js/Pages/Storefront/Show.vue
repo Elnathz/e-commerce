@@ -446,6 +446,11 @@ const onGalleryScroll = () => {
                                         <img :src="`/storage/${img.image_path}`" class="w-full h-full object-cover hover:scale-110 transition-transform duration-300" />
                                     </a>
                                 </div>
+                                
+                                <div v-if="review.admin_reply" class="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Balasan Toko</p>
+                                    <p class="text-sm text-gray-800 leading-relaxed whitespace-pre-wrap">{{ review.admin_reply }}</p>
+                                </div>
                             </div>
                         </div>
                     </div>

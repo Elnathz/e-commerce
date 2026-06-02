@@ -17,7 +17,7 @@ class ProductController extends Controller
         // Mengurutkan produk berdasarkan nama kategori terlebih dahulu agar mudah dikelompokkan di frontend
         $products = Product::select('products.*')
             ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
-            ->with('category')
+            ->with(['category', 'images'])
             ->orderBy('categories.name', 'asc')
             ->orderBy('products.created_at', 'desc')
             ->paginate(20);

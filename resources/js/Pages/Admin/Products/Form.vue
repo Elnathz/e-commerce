@@ -37,30 +37,30 @@ const submit = () => {
 
     <AdminLayout>
         <template #header>
-            <h2 class="text-xl font-semibold leading-tight text-gray-900 dark:text-white">
+            <h2 class="text-xl font-bold leading-tight text-slate-900">
                 {{ isEditing ? 'Edit Info Dasar Produk' : 'Tambah Produk Baru' }}
             </h2>
         </template>
 
-        <div class="py-12">
+        <div class="py-12 bg-slate-50 min-h-screen">
             <div class="mx-auto max-w-2xl sm:px-6 lg:px-8">
-                <div class="overflow-hidden bg-white shadow-sm sm:rounded-lg dark:bg-gray-800">
+                <div class="overflow-hidden bg-white shadow-sm ring-1 ring-slate-200 sm:rounded-2xl">
                     <div class="p-6 sm:p-8">
                         
-                        <p v-if="!isEditing" class="mb-6 text-sm text-gray-600 dark:text-gray-400 bg-gray-50 dark:bg-gray-900 p-4 rounded border border-gray-200 dark:border-gray-700">
-                            <strong>Langkah 1:</strong> Isi informasi dasar produk terlebih dahulu. Setelah disimpan, Anda akan diarahkan ke halaman khusus untuk menambahkan <strong class="text-gray-900 dark:text-white">Stok, Variasi, dan Foto Produk</strong>.
+                        <p v-if="!isEditing" class="mb-6 text-sm text-blue-800 bg-blue-50 p-4 rounded-xl border border-blue-200">
+                            <strong>Langkah 1:</strong> Isi informasi dasar produk terlebih dahulu. Setelah disimpan, Anda akan diarahkan ke halaman khusus untuk menambahkan <strong class="text-blue-900">Stok, Variasi, dan Foto Produk</strong>.
                         </p>
 
                         <form @submit.prevent="submit" class="space-y-6">
                             
                             <!-- Category -->
                             <div>
-                                <InputLabel for="category_id" value="Kategori Produk" />
+                                <InputLabel for="category_id" value="Kategori Produk" class="font-bold text-slate-700" />
                                 <select 
                                     id="category_id" 
                                     v-model="form.category_id" 
                                     required
-                                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white sm:text-sm"
+                                    class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 >
                                     <option value="" disabled>-- Pilih Kategori --</option>
                                     <option v-for="cat in categories" :key="cat.id" :value="cat.id">
@@ -72,11 +72,11 @@ const submit = () => {
 
                             <!-- Name -->
                             <div>
-                                <InputLabel for="name" value="Nama Produk" />
+                                <InputLabel for="name" value="Nama Produk" class="font-bold text-slate-700" />
                                 <TextInput
                                     id="name"
                                     type="text"
-                                    class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
+                                    class="mt-1 block w-full border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm"
                                     v-model="form.name"
                                     required
                                 />
@@ -85,12 +85,12 @@ const submit = () => {
 
                             <!-- Description -->
                             <div>
-                                <InputLabel for="description" value="Deskripsi Lengkap" />
+                                <InputLabel for="description" value="Deskripsi Lengkap" class="font-bold text-slate-700" />
                                 <textarea
                                     id="description"
                                     v-model="form.description"
                                     rows="5"
-                                    class="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 shadow-sm focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white sm:text-sm"
+                                    class="mt-1 block w-full rounded-lg border-slate-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                                 ></textarea>
                                 <InputError class="mt-2" :message="form.errors.description" />
                             </div>
@@ -98,12 +98,12 @@ const submit = () => {
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <!-- Base Price -->
                                 <div>
-                                    <InputLabel for="base_price" value="Harga Dasar (Rp)" />
+                                    <InputLabel for="base_price" value="Harga Dasar (Rp)" class="font-bold text-slate-700" />
                                     <TextInput
                                         id="base_price"
                                         type="number"
                                         min="0"
-                                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
+                                        class="mt-1 block w-full border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm"
                                         v-model="form.base_price"
                                         required
                                     />
@@ -112,36 +112,38 @@ const submit = () => {
 
                                 <!-- Weight -->
                                 <div>
-                                    <InputLabel for="weight_gram" value="Berat (Gram)" />
+                                    <InputLabel for="weight_gram" value="Berat (Gram)" class="font-bold text-slate-700" />
                                     <TextInput
                                         id="weight_gram"
                                         type="number"
                                         min="0"
-                                        class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white"
+                                        class="mt-1 block w-full border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm"
                                         v-model="form.weight_gram"
                                         required
                                     />
-                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">1000 gram = 1 kg</p>
+                                    <p class="text-xs text-slate-500 mt-1">1000 gram = 1 kg</p>
                                     <InputError class="mt-2" :message="form.errors.weight_gram" />
                                 </div>
                             </div>
 
                             <!-- Is Active -->
-                            <div class="flex items-center gap-3 border border-gray-200 dark:border-gray-700 p-4 rounded-md">
-                                <Checkbox name="is_active" v-model:checked="form.is_active" class="text-black dark:text-white focus:ring-black dark:focus:ring-white dark:bg-gray-900 dark:border-gray-700" />
-                                <div>
-                                    <InputLabel for="is_active" value="Aktifkan Produk Ini" />
-                                    <p class="text-xs text-gray-500 dark:text-gray-400">Jika tidak dicentang, produk ini akan disembunyikan dari toko.</p>
-                                </div>
+                            <div>
+                                <label class="flex items-start gap-3 p-4 border border-slate-200 rounded-xl cursor-pointer hover:bg-slate-50 transition-colors">
+                                    <input type="checkbox" v-model="form.is_active" class="mt-0.5 w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shadow-sm" />
+                                    <div>
+                                        <span class="block font-bold text-slate-900">Aktifkan Produk Ini</span>
+                                        <span class="block text-xs text-slate-500 mt-1">Jika tidak dicentang, produk ini akan disembunyikan dari toko.</span>
+                                    </div>
+                                </label>
                                 <InputError class="mt-2" :message="form.errors.is_active" />
                             </div>
 
                             <!-- Actions -->
-                            <div class="flex items-center gap-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <PrimaryButton :disabled="form.processing" class="w-full sm:w-auto justify-center bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white">
+                            <div class="flex items-center gap-4 pt-6 border-t border-slate-200">
+                                <PrimaryButton :disabled="form.processing" class="w-full sm:w-auto justify-center !bg-blue-600 hover:!bg-blue-700 !rounded-xl">
                                     {{ isEditing ? 'Simpan Perubahan' : 'Lanjut Tambah Stok' }}
                                 </PrimaryButton>
-                                <Link :href="route('admin.products.index')" class="text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 underline transition-colors">
+                                <Link :href="route('admin.products.index')" class="text-sm font-bold text-slate-500 hover:text-slate-800 transition-colors">
                                     Batal
                                 </Link>
                             </div>

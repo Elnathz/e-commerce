@@ -1,7 +1,7 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     orders: Object,
@@ -46,6 +46,31 @@ const isStale = (order) => {
     threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
     
     return updatedDate < threeDaysAgo;
+};
+
+const groupedOrders = computed(() => {
+    if (!props.orders || !props.orders.data) return [];
+    
+    const groups = {};
+    props.orders.data.forEach(order => {
+        const dateStr = new Date(order.created_at).toLocaleDateString('id-ID', {
+            weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        });
+        if (!groups[dateStr]) {
+            groups[dateStr] = [];
+        }
+        groups[dateStr].push(order);
+    });
+    
+    return Object.keys(groups).map(date => ({
+        date,
+        orders: groups[date]
+    }));
+});
+
+const collapsedDates = ref({});
+const toggleDate = (date) => {
+    collapsedDates.value[date] = !collapsedDates.value[date];
 };
 </script>
 
@@ -99,29 +124,45 @@ const isStale = (order) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <tr v-for="order in orders.data" :key="order.id" class="border-b border-slate-100 hover:bg-slate-50">
-                                        <td class="px-4 py-3 font-semibold text-slate-900">{{ order.order_number }}</td>
-                                        <td class="px-4 py-3">{{ new Date(order.created_at).toLocaleString('id-ID') }}</td>
-                                        <td class="px-4 py-3">
-                                            {{ order.user ? order.user.name : 'Unknown' }}
-                                        </td>
-                                        <td class="px-4 py-3 font-semibold text-slate-700">Rp {{ formatPrice(order.total_amount) }}</td>
-                                        <td class="px-4 py-3 text-center">
-                                            <span :class="['px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mb-1', getStatusClass(order.status)]">
-                                                {{ statuses.find(s => s.value === order.status)?.label || order.status }}
-                                            </span>
-                                            <div v-if="(order.status === 'paid' || order.status === 'processing') && isStale(order)" class="mt-1">
-                                                <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-600 text-white shadow-sm animate-pulse">
-                                                    PRIORITAS
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td class="px-4 py-3 text-center">
-                                            <Link :href="route('admin.orders.show', order.id)" class="text-blue-600 font-bold hover:text-blue-800 hover:underline">
-                                                Lihat Detail
-                                            </Link>
-                                        </td>
-                                    </tr>
+                                    <template v-for="group in groupedOrders" :key="group.date">
+                                        <!-- Group Header -->
+                                        <tr @click="toggleDate(group.date)" class="bg-slate-100 hover:bg-slate-200 cursor-pointer border-b border-slate-200 transition-colors">
+                                            <td colspan="6" class="px-4 py-3 font-bold text-slate-800">
+                                                <div class="flex items-center gap-2">
+                                                    <svg :class="{'rotate-180': collapsedDates[group.date]}" class="w-4 h-4 transition-transform text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                                                    </svg>
+                                                    {{ group.date }} <span class="text-xs font-normal text-slate-500 ml-2">({{ group.orders.length }} pesanan)</span>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <!-- Orders -->
+                                        <template v-if="!collapsedDates[group.date]">
+                                            <tr v-for="order in group.orders" :key="order.id" class="border-b border-slate-100 hover:bg-slate-50">
+                                                <td class="px-4 py-3 font-semibold text-slate-900">{{ order.order_number }}</td>
+                                                <td class="px-4 py-3">{{ new Date(order.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) }}</td>
+                                                <td class="px-4 py-3">
+                                                    {{ order.user ? order.user.name : 'Unknown' }}
+                                                </td>
+                                                <td class="px-4 py-3 font-semibold text-slate-700">Rp {{ formatPrice(order.total_amount) }}</td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <span :class="['px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide inline-block mb-1', getStatusClass(order.status)]">
+                                                        {{ statuses.find(s => s.value === order.status)?.label || order.status }}
+                                                    </span>
+                                                    <div v-if="(order.status === 'paid' || order.status === 'processing') && isStale(order)" class="mt-1">
+                                                        <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide bg-red-600 text-white shadow-sm animate-pulse">
+                                                            PRIORITAS
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-4 py-3 text-center">
+                                                    <Link :href="route('admin.orders.show', order.id)" class="text-blue-600 font-bold hover:text-blue-800 hover:underline">
+                                                        Lihat Detail
+                                                    </Link>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </template>
                                 </tbody>
                             </table>
                         </div>

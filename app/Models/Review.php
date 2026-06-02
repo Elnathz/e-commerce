@@ -7,11 +7,12 @@ use Illuminate\Database\Eloquent\Model;
 class Review extends Model
 {
     protected $fillable = [
-        'order_item_id', 'user_id', 'product_id', 'rating', 'comment', 'is_published'
+        'order_item_id', 'user_id', 'product_id', 'rating', 'comment', 'is_published', 'admin_reply', 'replied_at'
     ];
 
     protected $casts = [
         'is_published' => 'boolean',
+        'replied_at' => 'datetime',
     ];
 
     public function user()
