@@ -98,6 +98,7 @@ const submitReply = (review) => {
             preserveScroll: true,
             onSuccess: () => {
                 form.admin_reply = '';
+                activeReply.value = null;
             }
         });
     }
@@ -265,15 +266,16 @@ const togglePublish = (review) => {
                                 </div>
 
                                 <!-- Admin Reply Section -->
-                                <div class="mt-4 border-t border-slate-100 pt-4" v-if="activeReply === review.id || review.admin_reply">
+                                <div class="mt-4 border-t border-slate-100 pt-4">
                                     <div v-if="review.admin_reply && activeReply !== review.id" class="bg-slate-100 p-4 rounded-xl border border-slate-200">
                                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Balasan Toko:</p>
                                         <p class="text-sm text-slate-800 whitespace-pre-wrap">{{ review.admin_reply }}</p>
                                         <p class="text-[11px] text-slate-400 mt-2">{{ new Date(review.replied_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit'}) }}</p>
                                     </div>
                                     <div v-else class="mt-3">
-                                        <button v-if="activeReply !== review.id" @click="toggleReplyForm(review.id)" class="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">
-                                            + Balas Ulasan
+                                        <button v-if="activeReply !== review.id" @click="toggleReplyForm(review.id); if (review.admin_reply) replyForms[review.id].admin_reply = review.admin_reply;" class="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">
+                                            <span v-if="review.admin_reply"><svg class="w-4 h-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>Edit Balasan</span>
+                                            <span v-else>+ Balas Ulasan</span>
                                         </button>
                                         <form v-if="activeReply === review.id" @submit.prevent="submitReply(review)" class="flex flex-col gap-2 mt-2">
                                             {{ initReplyForm(review.id) }}

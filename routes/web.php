@@ -52,6 +52,7 @@ Route::middleware('auth')->group(function () {
 
     // Reviews
     Route::post('/orders/{order_number}/reviews', [\App\Http\Controllers\ReviewController::class, 'store'])->name('reviews.store');
+    Route::post('/reviews/{review}/update', [\App\Http\Controllers\ReviewController::class, 'update'])->name('reviews.update');
 
     // Returns
     Route::post('/orders/{order_number}/return', [\App\Http\Controllers\ReturnController::class, 'store'])->name('returns.store');

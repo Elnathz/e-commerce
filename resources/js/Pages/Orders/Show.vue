@@ -68,25 +68,46 @@ const submitCancel = () => {
 
 // Review Modal State
 const reviewingItem = ref(null);
+const isEditingReview = ref(false);
+const editingReviewId = ref(null);
 const reviewForm = useForm({
     order_item_id: '',
     rating: 5,
     comment: '',
+    kept_images: [],
     images: [],
 });
 const previewImages = ref([]);
 
 const openReviewModal = (item) => {
+    isEditingReview.value = false;
+    editingReviewId.value = null;
     reviewingItem.value = item;
     reviewForm.order_item_id = item.id;
     reviewForm.rating = 5;
     reviewForm.comment = '';
+    reviewForm.kept_images = [];
     reviewForm.images = [];
     previewImages.value = [];
 };
 
+const openEditReviewModal = (item) => {
+    isEditingReview.value = true;
+    editingReviewId.value = item.review.id;
+    reviewingItem.value = item;
+    reviewForm.order_item_id = item.id;
+    reviewForm.rating = item.review.rating;
+    reviewForm.comment = item.review.comment || '';
+    reviewForm.kept_images = item.review.images ? item.review.images.map(img => img.id) : [];
+    reviewForm.images = [];
+    previewImages.value = item.review.images ? item.review.images.map(img => img.url) : [];
+    reviewForm.clearErrors();
+};
+
 const closeReviewModal = () => {
     reviewingItem.value = null;
+    isEditingReview.value = false;
+    editingReviewId.value = null;
     reviewForm.reset();
     reviewForm.clearErrors();
     previewImages.value = [];
@@ -96,7 +117,7 @@ const handleReviewImageChange = (e) => {
     const files = Array.from(e.target.files);
 
     // Check total images
-    if (reviewForm.images.length + files.length > 5) {
+    if (previewImages.value.length + files.length > 5) {
         alert('Maksimal 5 foto ulasan.');
         return;
     }
@@ -124,18 +145,32 @@ const handleReviewImageChange = (e) => {
 };
 
 const removeReviewImage = (index) => {
-    reviewForm.images.splice(index, 1);
+    const isKeptImage = isEditingReview.value && index < reviewForm.kept_images.length;
+    if (isKeptImage) {
+        reviewForm.kept_images.splice(index, 1);
+    } else {
+        const newImageIndex = isEditingReview.value ? index - reviewForm.kept_images.length : index;
+        reviewForm.images.splice(newImageIndex, 1);
+    }
     previewImages.value.splice(index, 1);
 };
 
 const submitReview = () => {
-    reviewForm.post(route('reviews.store', props.order.order_number), {
-        preserveScroll: true,
-        onSuccess: () => {
-            closeReviewModal();
-            // Data will be reloaded via Inertia
-        }
-    });
+    if (isEditingReview.value) {
+        reviewForm.post(route('reviews.update', editingReviewId.value), {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeReviewModal();
+            }
+        });
+    } else {
+        reviewForm.post(route('reviews.store', props.order.order_number), {
+            preserveScroll: true,
+            onSuccess: () => {
+                closeReviewModal();
+            }
+        });
+    }
 };
 
 // Return Modal State
@@ -396,6 +431,8 @@ const copyResi = async (resi) => {
                                                         <svg v-for="i in 5" :key="i" class="w-4 h-4" :class="i <= item.review.rating ? 'text-yellow-400' : 'text-slate-200'" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
                                                     </div>
                                                     <span class="text-xs text-slate-400">{{ new Date(item.review.created_at).toLocaleDateString('id-ID') }}</span>
+                                                    <span v-if="item.review.is_edited" class="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded italic">Telah Diedit</span>
+                                                    <button v-if="!item.review.is_edited && ((new Date() - new Date(item.review.created_at)) / (1000 * 60 * 60 * 24)) <= 30" @click="openEditReviewModal(item)" class="text-xs font-semibold text-blue-600 hover:text-blue-800 ml-2 underline">Edit Ulasan</button>
                                                 </div>
                                                 <p v-if="item.review.comment" class="text-sm text-slate-700 leading-relaxed">{{ item.review.comment }}</p>
                                                 
@@ -557,7 +594,7 @@ const copyResi = async (resi) => {
         <!-- Review Modal -->
         <Modal :show="!!reviewingItem" @close="closeReviewModal">
             <div class="p-6" v-if="reviewingItem">
-                <h2 class="text-lg font-bold text-slate-900 mb-4 border-b pb-2">Beri Ulasan Produk</h2>
+                <h2 class="text-lg font-bold text-slate-900 mb-4 border-b pb-2">{{ isEditingReview ? 'Edit Ulasan' : 'Beri Ulasan Produk' }}</h2>
 
                 <div class="flex gap-4 items-center mb-6">
                     <div class="flex-1">

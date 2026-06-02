@@ -74,4 +74,74 @@ class ReviewController extends Controller
 
         return back()->with('success', 'Ulasan berhasil disimpan. Terima kasih!');
     }
+
+    public function update(Request $request, Review $review)
+    {
+        if ($review->user_id !== Auth::id()) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        if ($review->is_edited) {
+            return back()->with('error', 'Ulasan hanya dapat diedit satu kali.');
+        }
+
+        if ($review->created_at->diffInDays(now()) > 30) {
+            return back()->with('error', 'Ulasan hanya dapat diedit dalam waktu 30 hari setelah dibuat.');
+        }
+
+        $request->validate([
+            'rating' => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
+            'kept_images' => 'nullable|array',
+            'kept_images.*' => 'exists:review_images,id',
+            'images' => 'nullable|array',
+            'images.*' => 'image|mimes:jpeg,png,jpg|max:5120',
+        ]);
+
+        $keptImagesCount = is_array($request->kept_images) ? count($request->kept_images) : 0;
+        $newImagesCount = $request->hasFile('images') ? count($request->file('images')) : 0;
+
+        if (($keptImagesCount + $newImagesCount) > 5) {
+            return back()->with('error', 'Total maksimal foto adalah 5.');
+        }
+
+        $review->update([
+            'rating' => $request->rating,
+            'comment' => $request->comment,
+            'is_edited' => true,
+        ]);
+
+        // Delete images not in kept_images
+        $imagesToDelete = $review->images();
+        if ($request->has('kept_images') && is_array($request->kept_images)) {
+            $imagesToDelete = $imagesToDelete->whereNotIn('id', $request->kept_images);
+        }
+        
+        $imagesToDelete = $imagesToDelete->get();
+        foreach ($imagesToDelete as $imageToDelete) {
+            if (Storage::disk('public')->exists($imageToDelete->image_path)) {
+                Storage::disk('public')->delete($imageToDelete->image_path);
+            }
+            $imageToDelete->delete();
+        }
+
+        // Upload new images
+        if ($request->hasFile('images')) {
+            $manager = new ImageManager(new Driver());
+            
+            foreach ($request->file('images') as $file) {
+                $image = $manager->decode($file->getRealPath());
+                $image->scaleDown(width: 1200);
+                
+                $filename = 'reviews/' . Str::uuid() . '.jpg';
+                Storage::disk('public')->put($filename, (string) $image->encode(new \Intervention\Image\Encoders\JpegEncoder(quality: 80)));
+
+                $review->images()->create([
+                    'image_path' => $filename,
+                ]);
+            }
+        }
+
+        return back()->with('success', 'Ulasan berhasil diperbarui.');
+    }
 }
