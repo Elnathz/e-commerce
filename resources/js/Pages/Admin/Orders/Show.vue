@@ -112,6 +112,14 @@ const address = props.order.shipping_address_snapshot;
                                 </p>
                             </div>
                             <div v-else class="text-sm text-red-500">Data alamat tidak tersedia.</div>
+                            
+                            <!-- Catatan Pembeli -->
+                            <div v-if="order.notes" class="mt-4 pt-4 border-t border-slate-100">
+                                <span class="font-semibold text-slate-900 text-sm block mb-1">Catatan Pembeli:</span>
+                                <p class="text-sm text-slate-700 bg-yellow-50 border border-yellow-100 p-3 rounded-lg italic">
+                                    "{{ order.notes }}"
+                                </p>
+                            </div>
                         </div>
 
                         <!-- Daftar Item -->

@@ -2,10 +2,22 @@
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
+import { useImageViewer } from '@/Composables/useImageViewer';
+import SharedImageViewerModal from '@/Components/SharedImageViewerModal.vue';
 
 const props = defineProps({
     returnRequest: Object,
 });
+
+const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtitle, openViewer, closeViewer } = useImageViewer();
+
+const openReturnImages = (index) => {
+    const images = [];
+    if (props.returnRequest.evidence_image_1) images.push({ url: `/storage/${props.returnRequest.evidence_image_1}` });
+    if (props.returnRequest.evidence_image_2) images.push({ url: `/storage/${props.returnRequest.evidence_image_2}` });
+    if (props.returnRequest.evidence_image_3) images.push({ url: `/storage/${props.returnRequest.evidence_image_3}` });
+    openViewer(images, index, 'Bukti Retur', `Order: ${props.returnRequest.order?.order_number || '-'}`);
+};
 
 const getStatusDisplay = (status) => {
     const displays = {
@@ -130,15 +142,15 @@ const submitTracking = () => {
                     <div class="p-6 border-b border-slate-100">
                         <h3 class="font-bold text-slate-900 mb-4">Foto Bukti</h3>
                         <div class="flex flex-wrap gap-4">
-                            <a v-if="returnRequest.evidence_image_1" :href="`/storage/${returnRequest.evidence_image_1}`" target="_blank">
-                                <img :src="`/storage/${returnRequest.evidence_image_1}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80">
-                            </a>
-                            <a v-if="returnRequest.evidence_image_2" :href="`/storage/${returnRequest.evidence_image_2}`" target="_blank">
-                                <img :src="`/storage/${returnRequest.evidence_image_2}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80">
-                            </a>
-                            <a v-if="returnRequest.evidence_image_3" :href="`/storage/${returnRequest.evidence_image_3}`" target="_blank">
-                                <img :src="`/storage/${returnRequest.evidence_image_3}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80">
-                            </a>
+                            <button type="button" v-if="returnRequest.evidence_image_1" @click="openReturnImages(0)" class="focus:outline-none">
+                                <img :src="`/storage/${returnRequest.evidence_image_1}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80 cursor-zoom-in">
+                            </button>
+                            <button type="button" v-if="returnRequest.evidence_image_2" @click="openReturnImages(returnRequest.evidence_image_1 ? 1 : 0)" class="focus:outline-none">
+                                <img :src="`/storage/${returnRequest.evidence_image_2}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80 cursor-zoom-in">
+                            </button>
+                            <button type="button" v-if="returnRequest.evidence_image_3" @click="openReturnImages((returnRequest.evidence_image_1 ? 1 : 0) + (returnRequest.evidence_image_2 ? 1 : 0))" class="focus:outline-none">
+                                <img :src="`/storage/${returnRequest.evidence_image_3}`" class="w-24 h-24 object-cover rounded-lg border border-slate-200 hover:opacity-80 cursor-zoom-in">
+                            </button>
                         </div>
                     </div>
                     
@@ -158,5 +170,17 @@ const submitTracking = () => {
 
             </div>
         </div>
+
+        <!-- Shared Image Viewer Modal -->
+        <SharedImageViewerModal 
+            :show="isViewerOpen"
+            :images="viewerImages"
+            :activeIndex="viewerActiveIndex"
+            :title="viewerTitle"
+            :subtitle="viewerSubtitle"
+            @close="closeViewer"
+            @update:activeIndex="viewerActiveIndex = $event"
+        />
+
     </StorefrontLayout>
 </template>

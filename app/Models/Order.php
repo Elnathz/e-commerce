@@ -33,6 +33,11 @@ class Order extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    public function reviews()
+    {
+        return $this->hasManyThrough(Review::class, OrderItem::class);
+    }
+
     /**
      * All payment attempts for this order (1:N - supports retry)
      */

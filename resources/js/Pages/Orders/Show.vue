@@ -6,6 +6,10 @@ import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
 import Modal from '@/Components/Modal.vue';
+import SharedImageViewerModal from '@/Components/SharedImageViewerModal.vue';
+import { useImageViewer } from '@/Composables/useImageViewer';
+
+const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtitle, openViewer, closeViewer } = useImageViewer();
 
 const props = defineProps({
     order: Object,
@@ -345,40 +349,82 @@ const copyResi = async (resi) => {
                             <h3 class="text-lg font-bold text-slate-900 mb-4 border-b border-slate-100 pb-2">Daftar
                                 Produk</h3>
                             <div class="space-y-4">
-                                <div v-for="item in order.items" :key="item.id"
-                                    class="flex flex-col sm:flex-row items-start sm:items-center gap-4 border-b border-slate-50 pb-4 last:border-0 last:pb-0">
-                                    <div class="flex-1">
-                                        <Link v-if="item.product_variant && item.product_variant.product"
-                                            :href="route('products.show', item.product_variant.product.slug)"
-                                            class="font-bold text-slate-900 text-base hover:text-blue-600 hover:underline transition-colors block">
-                                            {{ item.product_name_snapshot }}
-                                        </Link>
-                                        <h4 v-else class="font-bold text-slate-900 text-base">{{
-                                            item.product_name_snapshot }}</h4>
-                                        <p class="text-sm text-slate-500 mt-0.5">Varian: {{ item.variant_name_snapshot
-                                            }}</p>
-                                        <p class="text-sm font-semibold text-slate-700 mt-1">{{ item.quantity }} x Rp {{
-                                            formatPrice(item.unit_price) }}</p>
-                                    </div>
-                                    <div class="flex flex-col sm:items-end gap-2">
-                                        <div class="font-bold text-slate-900 text-lg">
-                                            Rp {{ formatPrice(item.subtotal) }}
+                                <div v-for="item in order.items" :key="item.id" class="border-b border-slate-50 pb-4 last:border-0 last:pb-0">
+                                    <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                                        <div class="flex-1">
+                                            <Link v-if="item.product_variant && item.product_variant.product"
+                                                :href="route('products.show', item.product_variant.product.slug)"
+                                                class="font-bold text-slate-900 text-base hover:text-blue-600 hover:underline transition-colors block">
+                                                {{ item.product_name_snapshot }}
+                                            </Link>
+                                            <h4 v-else class="font-bold text-slate-900 text-base">{{
+                                                item.product_name_snapshot }}</h4>
+                                            <p class="text-sm text-slate-500 mt-0.5">Varian: {{ item.variant_name_snapshot
+                                                }}</p>
+                                            <p class="text-sm font-semibold text-slate-700 mt-1">{{ item.quantity }} x Rp {{
+                                                formatPrice(item.unit_price) }}</p>
                                         </div>
-                                        <Link v-if="item.product_variant && item.product_variant.product"
-                                            :href="route('products.show', item.product_variant.product.slug)"
-                                            class="inline-flex items-center justify-center px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors shadow-sm">
-                                            Lihat Produk
-                                        </Link>
+                                        <div class="flex flex-col sm:items-end gap-2">
+                                            <div class="font-bold text-slate-900 text-lg">
+                                                Rp {{ formatPrice(item.subtotal) }}
+                                            </div>
+                                            <Link v-if="item.product_variant && item.product_variant.product"
+                                                :href="route('products.show', item.product_variant.product.slug)"
+                                                class="inline-flex items-center justify-center px-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 transition-colors shadow-sm">
+                                                Lihat Produk
+                                            </Link>
 
-                                        <button v-if="order.status === 'completed' && !item.review"
-                                            @click="openReviewModal(item)"
-                                            class="mt-2 inline-flex items-center justify-center px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm">
-                                            Beri Ulasan
-                                        </button>
-                                        <span v-else-if="order.status === 'completed' && item.review"
-                                            class="mt-2 text-xs text-green-600 font-semibold bg-green-50 px-2 py-1 rounded-md border border-green-200">
-                                            ✓ Sudah Diulas
-                                        </span>
+                                            <button v-if="order.status === 'completed' && !item.review && (!order.return_request || order.return_request.status === 'rejected')"
+                                                @click="openReviewModal(item)"
+                                                class="mt-2 inline-flex items-center justify-center px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm">
+                                                Beri Ulasan
+                                            </button>
+                                            <div v-else-if="order.status === 'completed' && !item.review && order.return_request && order.return_request.status !== 'rejected'"
+                                                class="mt-2 text-xs font-semibold text-red-600 bg-red-50 px-2 py-1.5 rounded-md border border-red-200 text-center">
+                                                Tidak Dapat Diulas (Ada Retur)
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- ULASAN SAYA SECTION -->
+                                    <div v-if="item.review" class="mt-4 pt-4 border-t border-slate-100 pl-0 sm:pl-[88px]">
+                                        <div class="flex flex-col sm:flex-row items-start justify-between gap-4">
+                                            <div class="flex-1 space-y-2">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded uppercase tracking-wider">Ulasan Saya</span>
+                                                    <div class="flex text-yellow-400">
+                                                        <svg v-for="i in 5" :key="i" class="w-4 h-4" :class="i <= item.review.rating ? 'text-yellow-400' : 'text-slate-200'" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>
+                                                    </div>
+                                                    <span class="text-xs text-slate-400">{{ new Date(item.review.created_at).toLocaleDateString('id-ID') }}</span>
+                                                </div>
+                                                <p v-if="item.review.comment" class="text-sm text-slate-700 leading-relaxed">{{ item.review.comment }}</p>
+                                                
+                                                <!-- Review Images -->
+                                                <div v-if="item.review.images && item.review.images.length > 0" class="flex gap-2 mt-3 overflow-x-auto pb-2 no-scrollbar">
+                                                    <button v-for="(img, idx) in item.review.images" :key="idx" 
+                                                        @click="openViewer(item.review.images, idx, 'Foto Ulasan', item.product_name_snapshot)"
+                                                        class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 shrink-0 hover:border-blue-400 transition-colors">
+                                                        <img :src="img.url" class="w-full h-full object-cover">
+                                                    </button>
+                                                </div>
+
+                                                <!-- Admin Reply -->
+                                                <div v-if="item.review.admin_reply" class="mt-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
+                                                    <div class="flex items-center gap-2 mb-1">
+                                                        <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+                                                        <span class="text-xs font-bold text-slate-800 uppercase tracking-wider">Balasan Toko</span>
+                                                        <span class="text-xs text-slate-400">• {{ new Date(item.review.replied_at).toLocaleDateString('id-ID') }}</span>
+                                                    </div>
+                                                    <p class="text-sm text-slate-700 leading-relaxed">{{ item.review.admin_reply }}</p>
+                                                </div>
+                                            </div>
+                                            <div class="shrink-0 flex flex-col items-start sm:items-end gap-1 mt-2 sm:mt-0">
+                                                <span v-if="item.review.admin_reply" class="text-[10px] font-bold uppercase tracking-wider text-green-600 bg-green-50 px-2 py-1 rounded-md border border-green-200">
+                                                    ✓ Dibalas {{ new Date(item.review.replied_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) }}
+                                                </span>
+                                                <span v-else class="text-[10px] font-bold uppercase tracking-wider text-slate-500 bg-slate-100 px-2 py-1 rounded-md border border-slate-200">Belum Dibalas</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -393,6 +439,14 @@ const copyResi = async (resi) => {
                                 <p>{{ address.address_detail }}</p>
                                 <p>{{ address.district }}, {{ address.city }}</p>
                                 <p>{{ address.province }} {{ address.postal_code }}</p>
+                            </div>
+                            
+                            <!-- Catatan Pesanan -->
+                            <div v-if="order.notes" class="mt-4 pt-4 border-t border-slate-100">
+                                <span class="font-semibold text-slate-900 text-sm block mb-1">Catatan untuk Toko:</span>
+                                <p class="text-sm text-slate-700 bg-yellow-50 border border-yellow-100 p-3 rounded-lg italic">
+                                    "{{ order.notes }}"
+                                </p>
                             </div>
                         </div>
 
@@ -684,6 +738,16 @@ const copyResi = async (resi) => {
                 </form>
             </div>
         </Modal>
+
+        <SharedImageViewerModal
+            :show="isViewerOpen"
+            :images="viewerImages"
+            :activeIndex="viewerActiveIndex"
+            :title="viewerTitle"
+            :subtitle="viewerSubtitle"
+            @close="closeViewer"
+            @update:activeIndex="viewerActiveIndex = $event"
+        />
 
     </StorefrontLayout>
 </template>

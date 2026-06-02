@@ -18,6 +18,13 @@ class OrderController extends Controller
 
         $query = Order::where('user_id', Auth::id())
             ->with(['items.productVariant.product.images', 'items.productVariant.images', 'returnRequest'])
+            ->withCount([
+                'items',
+                'items as reviewed_items_count' => function ($q) {
+                    $q->has('review');
+                }
+            ])
+            ->withAvg('reviews', 'rating')
             ->latest();
 
         // Helper closure untuk mengecualikan retur aktif
@@ -58,7 +65,7 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', Auth::id())
             ->where('order_number', $order_number)
-            ->with(['items.productVariant.product', 'items.review', 'returnRequest', 'payments' => function($q) {
+            ->with(['items.productVariant.product', 'items.review.images', 'returnRequest', 'payments' => function($q) {
                 $q->latest();
             }])
             ->firstOrFail();

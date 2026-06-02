@@ -44,12 +44,27 @@ class ReviewController extends Controller
             $query->where('rating', $request->rating);
         }
 
+        if ($request->filled('queue')) {
+            if ($request->queue === 'action_needed') {
+                $query->where(function($q) {
+                    $q->where('rating', '<=', 2)
+                      ->whereNull('admin_reply');
+                });
+            } elseif ($request->queue === 'unreplied') {
+                $query->whereNull('admin_reply');
+            }
+        }
+
         $reviews = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Admin/Reviews/Index', [
             'reviews' => $reviews,
             'stats' => $stats,
-            'filters' => $request->only(['q', 'rating']),
+            'filters' => [
+                'q' => $request->q,
+                'rating' => $request->rating,
+                'queue' => $request->queue ?? 'all',
+            ]
         ]);
     }
 

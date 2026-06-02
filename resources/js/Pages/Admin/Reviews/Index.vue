@@ -4,6 +4,8 @@ import { Head, router, Link, useForm } from '@inertiajs/vue3';
 import { ref, watch, computed } from 'vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
+import { useImageViewer } from '@/Composables/useImageViewer';
+import SharedImageViewerModal from '@/Components/SharedImageViewerModal.vue';
 
 const activeReply = ref(null);
 const toggleReplyForm = (id) => {
@@ -25,6 +27,8 @@ const bulkModerateForm = useForm({
     review_ids: [],
     action: ''
 });
+
+const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtitle, openViewer, closeViewer } = useImageViewer();
 
 const submitBulkModerate = (action) => {
     bulkModerateForm.review_ids = selectedReviews.value;
@@ -62,6 +66,20 @@ const props = defineProps({
 
 const search = ref(props.filters.q || '');
 const ratingFilter = ref(props.filters.rating || '');
+const queueFilter = ref(props.filters.queue || 'all');
+
+const getSLA = (createdAt) => {
+    const created = new Date(createdAt);
+    const now = new Date();
+    const diffHours = Math.floor((now - created) / (1000 * 60 * 60));
+    
+    if (diffHours < 24) {
+        return diffHours <= 0 ? 'BARU SAJA' : `${diffHours} JAM`;
+    }
+    
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays} HARI`;
+};
 
 const replyForms = ref({});
 
@@ -85,10 +103,11 @@ const submitReply = (review) => {
     }
 };
 
-watch([search, ratingFilter], () => {
+watch([search, ratingFilter, queueFilter], () => {
     router.get(route('admin.reviews.index'), {
         q: search.value,
         rating: ratingFilter.value,
+        queue: queueFilter.value
     }, { preserveState: true, replace: true, preserveScroll: true });
 }, { deep: true });
 
@@ -146,15 +165,22 @@ const togglePublish = (review) => {
                 </div>
 
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-2xl border border-slate-200">
-                    <div class="p-6 bg-white border-b border-slate-100 flex flex-col sm:flex-row gap-4 items-center justify-between">
-                        <div class="flex items-center gap-4">
-                            <label class="flex items-center gap-2 text-sm font-medium text-slate-700 cursor-pointer select-none">
-                                <input type="checkbox" v-model="selectAll" @change="toggleSelectAll" class="rounded border-slate-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
-                                Pilih Semua
-                            </label>
-                            <h3 class="text-lg font-bold text-slate-800 border-l border-slate-200 pl-4 hidden md:block">Daftar Ulasan</h3>
+                    <!-- Queue Tabs & Filters -->
+                    <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div class="flex gap-1 overflow-x-auto no-scrollbar pb-1 xl:pb-0">
+                            <button @click="queueFilter = 'all'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors', queueFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200']">
+                                Semua Review
+                            </button>
+                            <button @click="queueFilter = 'action_needed'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors', queueFilter === 'action_needed' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100']">
+                                Perlu Tindakan
+                            </button>
+                            <button @click="queueFilter = 'unreplied'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2', queueFilter === 'unreplied' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-600 hover:bg-amber-100']">
+                                Belum Dibalas
+                                <span class="bg-white/20 px-1.5 py-0.5 rounded text-xs">{{ stats.unreplied_reviews }}</span>
+                            </button>
                         </div>
-                        <div class="flex gap-3 w-full sm:w-auto">
+                        
+                        <div class="flex gap-3 w-full xl:w-auto">
                             <input type="text" v-model="search" placeholder="Cari ulasan, nama produk..." class="border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm w-full sm:w-72 text-sm">
                             <select v-model="ratingFilter" class="border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm text-sm font-medium text-slate-700">
                                 <option value="">Semua Rating</option>
@@ -167,7 +193,7 @@ const togglePublish = (review) => {
                         </div>
                     </div>
                     
-                    <div class="divide-y divide-slate-100">
+                    <div :class="['divide-y divide-slate-100', selectedReviews.length > 0 ? 'pb-24' : '']">
                         <div v-for="review in reviews.data" :key="review.id" :class="['p-6 transition-colors hover:bg-slate-50/80 flex flex-col md:flex-row gap-6 items-start relative', review.rating <= 2 ? 'bg-red-50/10 border-l-4 border-red-500' : 'bg-white']">
                             
                             <div class="md:mt-1.5 shrink-0 hidden md:block">
@@ -181,12 +207,17 @@ const togglePublish = (review) => {
                                     <div class="md:hidden shrink-0 mt-0.5">
                                         <input type="checkbox" :value="review.id" v-model="selectedReviews" class="rounded border-slate-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50 cursor-pointer">
                                     </div>
-                                    <span v-if="review.rating <= 2" class="px-2 py-0.5 bg-red-100 text-red-800 text-[10px] font-bold uppercase rounded-sm border border-red-200">
+                                    <span v-if="review.rating <= 2 && !review.admin_reply" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 uppercase tracking-wide border border-red-200">
                                         Perlu Ditindaklanjuti
                                     </span>
-                                    <span v-if="!review.admin_reply" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm bg-yellow-100 text-yellow-800 border border-yellow-200">
-                                        Belum Dibalas
-                                    </span>
+                                    <div v-if="!review.admin_reply" class="inline-flex overflow-hidden rounded text-xs font-bold border border-amber-200">
+                                        <span class="px-2 py-0.5 bg-amber-100 text-amber-700 uppercase tracking-wide">
+                                            Belum Dibalas
+                                        </span>
+                                        <span class="px-2 py-0.5 bg-amber-500 text-white">
+                                            {{ getSLA(review.created_at) }}
+                                        </span>
+                                    </div>
                                     <span v-else class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm bg-green-100 text-green-800 border border-green-200 flex items-center gap-1">
                                         <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
                                         Sudah Dibalas
@@ -196,9 +227,12 @@ const togglePublish = (review) => {
                                     </span>
                                 </div>
                                 
-                                <Link :href="route('admin.products.edit', review.product.id)" class="block font-bold text-blue-600 hover:text-blue-800 leading-tight text-base mb-1.5 cursor-pointer">
+                                <Link :href="route('admin.products.edit', review.product.id)" class="block font-bold text-blue-600 hover:text-blue-800 leading-tight text-base mb-1 cursor-pointer">
                                     {{ review.product.name }}
                                 </Link>
+                                <p v-if="review.order_item?.variant_name_snapshot" class="text-xs text-slate-500 mb-2 font-medium bg-slate-100 inline-block px-2 py-0.5 rounded border border-slate-200">
+                                    Varian: {{ review.order_item.variant_name_snapshot }}
+                                </p>
                                 
                                 <div class="text-sm text-slate-600 flex items-center gap-1.5">
                                     <svg class="w-4 h-4 text-slate-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" /></svg>
@@ -214,7 +248,7 @@ const togglePublish = (review) => {
                             </div>
                             
                             <!-- Rating & Comment -->
-                            <div class="flex-1 w-full">
+                            <div class="flex-1 w-full min-w-0">
                                 <div class="flex items-center gap-1 mb-3">
                                     <svg v-for="i in 5" :key="i" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" :class="['w-5 h-5', i <= review.rating ? 'text-yellow-400' : 'text-slate-200']">
                                         <path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.006z" clip-rule="evenodd" />
@@ -224,15 +258,15 @@ const togglePublish = (review) => {
                                     {{ review.comment || 'Tidak ada teks ulasan disertakan.' }}
                                 </p>
                                 
-                                <div class="flex flex-wrap gap-2 mt-4" v-if="review.images.length > 0">
-                                    <a v-for="img in review.images" :key="img.id" :href="`/storage/${img.image_path}`" target="_blank" class="block rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors shadow-sm cursor-zoom-in">
-                                        <img :src="`/storage/${img.image_path}`" class="w-24 h-24 object-cover hover:scale-105 transition-transform duration-300" />
-                                    </a>
+                                <div v-if="review.images && review.images.length > 0" class="mt-4 grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
+                                    <button type="button" v-for="(img, imgIdx) in review.images" :key="img.id" @click.stop="openViewer(review.images.map(i => ({ url: `/storage/${i.image_path}` })), imgIdx, `Ulasan: ${review.product.name}`, review.order_item?.order?.order_number ? `Order: ${review.order_item.order.order_number}` : '')" class="block rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 transition-colors shadow-sm cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <img :src="`/storage/${img.image_path}`" class="w-full h-24 object-cover" alt="Review photo">
+                                    </button>
                                 </div>
 
                                 <!-- Admin Reply Section -->
-                                <div class="mt-5">
-                                    <div v-if="review.admin_reply" class="bg-slate-100 p-4 rounded-xl border border-slate-200">
+                                <div class="mt-4 border-t border-slate-100 pt-4" v-if="activeReply === review.id || review.admin_reply">
+                                    <div v-if="review.admin_reply && activeReply !== review.id" class="bg-slate-100 p-4 rounded-xl border border-slate-200">
                                         <p class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Balasan Toko:</p>
                                         <p class="text-sm text-slate-800 whitespace-pre-wrap">{{ review.admin_reply }}</p>
                                         <p class="text-[11px] text-slate-400 mt-2">{{ new Date(review.replied_at).toLocaleDateString('id-ID', {day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute:'2-digit'}) }}</p>
@@ -243,6 +277,11 @@ const togglePublish = (review) => {
                                         </button>
                                         <form v-if="activeReply === review.id" @submit.prevent="submitReply(review)" class="flex flex-col gap-2 mt-2">
                                             {{ initReplyForm(review.id) }}
+                                            <div class="flex flex-wrap gap-2 mb-2">
+                                                <button type="button" @click="replyForms[review.id].admin_reply = 'Terima kasih atas ulasannya!'" class="text-xs px-3 py-1.5 font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200">Terima Kasih</button>
+                                                <button type="button" @click="replyForms[review.id].admin_reply = 'Mohon maaf atas kendala yang dialami. Silakan hubungi CS kami agar segera dibantu.'" class="text-xs px-3 py-1.5 font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200">Mohon Maaf</button>
+                                                <button type="button" @click="replyForms[review.id].admin_reply = 'Mohon maaf, produk ini akan kami jadikan bahan evaluasi. Anda dapat mengajukan klaim garansi atau retur melalui pesanan Anda.'" class="text-xs px-3 py-1.5 font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200">Ajukan Retur</button>
+                                            </div>
                                             <textarea v-model="replyForms[review.id].admin_reply" placeholder="Ketik balasan untuk pelanggan ini..." class="w-full text-sm rounded-lg border-slate-300 focus:border-blue-500 focus:ring-blue-500 shadow-sm" rows="3" required></textarea>
                                             <div class="flex gap-2 justify-end">
                                                 <button type="button" @click="toggleReplyForm(review.id)" class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">Batal</button>
@@ -295,12 +334,12 @@ const togglePublish = (review) => {
         </div>
 
         <!-- Floating Bulk Action Bar -->
-        <div v-if="selectedReviews.length > 0" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white border border-slate-200 px-4 py-3 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] flex items-center gap-4 animate-fade-in-up">
-            <div class="flex items-center gap-3 pr-4 border-r border-slate-200">
-                <span class="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">{{ selectedReviews.length }}</span>
-                <span class="font-bold text-sm text-slate-700">Ulasan Terpilih</span>
+        <div v-if="selectedReviews.length > 0" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 bg-white border border-slate-200 px-4 py-3 rounded-2xl shadow-[0_-4px_12px_rgba(0,0,0,0.15)] flex items-center gap-4 animate-fade-in-up w-max max-w-[95vw] overflow-x-auto">
+            <div class="flex items-center gap-3 pr-4 border-r border-slate-200 shrink-0">
+                <span class="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-blue-100 text-blue-700 text-sm font-bold">{{ selectedReviews.length }}</span>
+                <span class="font-bold text-sm text-slate-700 whitespace-nowrap">Ulasan Terpilih</span>
             </div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 shrink-0">
                 <button v-if="canPublish" @click="submitBulkModerate('publish')" :disabled="bulkModerateForm.processing" class="text-sm font-bold px-4 py-2 bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-blue-600 hover:border-blue-300 rounded-xl transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm">
                     <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                     Tampilkan
@@ -311,5 +350,17 @@ const togglePublish = (review) => {
                 </button>
             </div>
         </div>
+        
+        <!-- Shared Image Viewer Modal -->
+        <SharedImageViewerModal 
+            :show="isViewerOpen"
+            :images="viewerImages"
+            :activeIndex="viewerActiveIndex"
+            :title="viewerTitle"
+            :subtitle="viewerSubtitle"
+            @close="closeViewer"
+            @update:activeIndex="viewerActiveIndex = $event"
+        />
+
     </AdminLayout>
 </template>

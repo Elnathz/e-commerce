@@ -3,11 +3,15 @@ import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import ProductCard from '@/Components/Storefront/ProductCard.vue';
+import { useImageViewer } from '@/Composables/useImageViewer';
+import SharedImageViewerModal from '@/Components/SharedImageViewerModal.vue';
 
 const props = defineProps({
     product: Object,
     relatedProducts: Array,
 });
+
+const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtitle, openViewer, closeViewer } = useImageViewer();
 
 // ─── Helpers ───
 const formatPrice = (price) =>
@@ -442,9 +446,9 @@ const onGalleryScroll = () => {
                                 <p class="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{{ review.comment }}</p>
                                 
                                 <div class="mt-3 flex flex-wrap gap-2" v-if="review.images && review.images.length > 0">
-                                    <a v-for="img in review.images" :key="img.id" :href="`/storage/${img.image_path}`" target="_blank" class="block w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-gray-200">
-                                        <img :src="`/storage/${img.image_path}`" class="w-full h-full object-cover hover:scale-110 transition-transform duration-300" />
-                                    </a>
+                                    <button type="button" v-for="(img, idx) in review.images" :key="img.id" @click.stop="openViewer(review.images.map(i => ({ url: `/storage/${i.image_path}` })), idx, 'Foto Ulasan', review.user.name)" class="block w-16 h-16 sm:w-20 sm:h-20 rounded-lg overflow-hidden border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                        <img :src="`/storage/${img.image_path}`" class="w-full h-full object-cover hover:scale-110 transition-transform duration-300 cursor-zoom-in" />
+                                    </button>
                                 </div>
                                 
                                 <div v-if="review.admin_reply" class="mt-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
@@ -508,6 +512,17 @@ const onGalleryScroll = () => {
         <!-- Spacer for mobile sticky bar -->
         <div class="md:hidden h-20"></div>
     </StorefrontLayout>
+
+    <!-- Shared Image Viewer Modal -->
+    <SharedImageViewerModal 
+        :show="isViewerOpen"
+        :images="viewerImages"
+        :activeIndex="viewerActiveIndex"
+        :title="viewerTitle"
+        :subtitle="viewerSubtitle"
+        @close="closeViewer"
+        @update:activeIndex="viewerActiveIndex = $event"
+    />
 </template>
 
 <style scoped>
