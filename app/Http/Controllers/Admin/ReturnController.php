@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\ReturnRequest;
+use App\Models\ProductVariant;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
+use Illuminate\Support\Facades\DB;
 
 class ReturnController extends Controller
 {
@@ -27,7 +30,9 @@ class ReturnController extends Controller
 
     public function show(ReturnRequest $returnRequest)
     {
-        $returnRequest->load(['user', 'order.items.productVariant.product']);
+        $returnRequest->load(['user', 'order.items.productVariant.product', 'items', 'histories' => function($q) {
+            $q->latest();
+        }]);
 
         return Inertia::render('Admin/Returns/Show', [
             'returnRequest' => $returnRequest,
@@ -36,72 +41,205 @@ class ReturnController extends Controller
 
     public function approve(Request $request, ReturnRequest $returnRequest)
     {
-        if (!$returnRequest->canTransitionTo('approved')) {
-            return back()->with('error', 'Transisi status tidak diizinkan.');
-        }
+        return DB::transaction(function() use ($returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('approved')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
 
-        $request->validate([
-            'refund_amount' => 'required|numeric|min:0|max:' . $returnRequest->order->total_amount,
-        ]);
+            $returnRequest->update([
+                'status' => 'approved',
+                'expires_at' => now()->addDays(3), // Admin SLA for approval is 3 days, customer has 3 days to ship
+            ]);
+            
+            $returnRequest->histories()->create([
+                'from_status' => 'submitted',
+                'to_status' => 'approved',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Pengajuan retur disetujui. Menunggu pelanggan mengirim barang.',
+            ]);
 
-        $returnRequest->update([
-            'status' => 'approved',
-            'refund_amount' => $request->refund_amount,
-            'expires_at' => now()->addDays(7), // Customer has 7 days to return the item
-        ]);
-
-        return back()->with('success', 'Pengajuan retur disetujui.');
+            return back()->with('success', 'Pengajuan retur disetujui.');
+        });
     }
 
     public function reject(Request $request, ReturnRequest $returnRequest)
     {
-        if (!$returnRequest->canTransitionTo('rejected')) {
-            return back()->with('error', 'Transisi status tidak diizinkan.');
-        }
-
         $request->validate([
             'admin_notes' => 'required|string|max:1000',
         ]);
 
-        $returnRequest->update([
-            'status' => 'rejected',
-            'admin_notes' => $request->admin_notes,
-        ]);
+        return DB::transaction(function() use ($request, $returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('rejected')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
 
-        return back()->with('success', 'Pengajuan retur ditolak.');
+            $from_status = $returnRequest->status;
+
+            $returnRequest->update([
+                'status' => 'rejected',
+                'admin_notes' => $request->admin_notes,
+            ]);
+
+            $returnRequest->histories()->create([
+                'from_status' => $from_status,
+                'to_status' => 'rejected',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Retur ditolak: ' . $request->admin_notes,
+            ]);
+
+            return back()->with('success', 'Pengajuan retur ditolak.');
+        });
     }
 
     public function receive(ReturnRequest $returnRequest)
     {
-        if (!$returnRequest->canTransitionTo('received')) {
-            return back()->with('error', 'Transisi status tidak diizinkan.');
-        }
+        return DB::transaction(function() use ($returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('received')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
+            
+            $from_status = $returnRequest->status;
 
-        $returnRequest->update([
-            'status' => 'received',
-            'return_received_at' => now(),
+            $returnRequest->update([
+                'status' => 'received',
+                'return_received_at' => now(),
+            ]);
+
+            $returnRequest->histories()->create([
+                'from_status' => $from_status,
+                'to_status' => 'received',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Barang retur telah diterima di gudang.',
+            ]);
+
+            return back()->with('success', 'Barang retur telah diterima.');
+        });
+    }
+
+    public function inspect(Request $request, ReturnRequest $returnRequest)
+    {
+        $request->validate([
+            'inspection_result' => 'required|in:passed,failed',
+            'items' => 'required_if:inspection_result,passed|array',
+            'items.*.id' => 'required|exists:return_request_items,id',
+            'items.*.refund_amount' => 'required|numeric|min:0',
+            'items.*.restock' => 'boolean',
+            'admin_notes' => 'nullable|string|max:1000',
         ]);
 
-        return back()->with('success', 'Barang retur telah diterima.');
+        return DB::transaction(function() use ($request, $returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('inspected')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
+
+            $from_status = $returnRequest->status;
+            $total_refund = 0;
+
+            if ($request->inspection_result === 'passed') {
+                foreach ($request->items as $itemData) {
+                    $item = $returnRequest->items()->where('id', $itemData['id'])->lockForUpdate()->first();
+                    
+                    if (!$item) continue;
+                    
+                    $item->update(['refund_amount' => $itemData['refund_amount']]);
+                    $total_refund += $itemData['refund_amount'];
+
+                    if (!empty($itemData['restock']) && !$item->is_restocked) {
+                        $orderItem = $item->orderItem;
+                        ProductVariant::where('id', $orderItem->product_variant_id)
+                            ->increment('stock', $item->quantity);
+                            
+                        $item->update(['is_restocked' => true]);
+                    }
+                }
+            }
+
+            $returnRequest->update([
+                'status' => 'inspected',
+                'inspection_result' => $request->inspection_result,
+                'refund_amount' => $total_refund,
+                'admin_notes' => $request->admin_notes ?? $returnRequest->admin_notes,
+            ]);
+
+            $returnRequest->histories()->create([
+                'from_status' => $from_status,
+                'to_status' => 'inspected',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Inspeksi selesai dengan hasil: ' . strtoupper($request->inspection_result) . '. ' . $request->admin_notes,
+            ]);
+            
+            return back()->with('success', 'Inspeksi barang berhasil disimpan.');
+        });
     }
 
     public function processRefund(ReturnRequest $returnRequest)
     {
-        if (!$returnRequest->canTransitionTo('refund_processed')) {
-            return back()->with('error', 'Transisi status tidak diizinkan.');
-        }
+        return DB::transaction(function() use ($returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('refund_processed')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
 
-        // Normally, call payment gateway to process refund here...
+            $from_status = $returnRequest->status;
 
-        $returnRequest->update([
-            'status' => 'refund_processed',
-            'refund_processed_at' => now(),
-        ]);
+            // Normally, call payment gateway to process refund here...
 
-        $returnRequest->order->update([
-            'status' => 'refunded'
-        ]);
+            $returnRequest->update([
+                'status' => 'refund_processed',
+                'refund_processed_at' => now(),
+            ]);
 
-        return back()->with('success', 'Pengembalian dana berhasil diproses.');
+            $order = $returnRequest->order;
+            // Calculate if it's partial or full refund based on total vs refund_amount
+            $is_full_refund = $returnRequest->refund_amount >= $order->total_amount;
+            
+            $order->update([
+                'refund_status' => $is_full_refund ? 'full' : 'partial'
+            ]);
+
+            $returnRequest->histories()->create([
+                'from_status' => $from_status,
+                'to_status' => 'refund_processed',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Refund berhasil diproses sebesar Rp ' . number_format($returnRequest->refund_amount, 0, ',', '.'),
+            ]);
+            
+            return back()->with('success', 'Pengembalian dana berhasil diproses.');
+        });
+    }
+    
+    public function complete(ReturnRequest $returnRequest)
+    {
+        return DB::transaction(function() use ($returnRequest) {
+            $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
+            if (!$returnRequest->canTransitionTo('completed')) {
+                return back()->with('error', 'Transisi status tidak diizinkan.');
+            }
+            
+            $from_status = $returnRequest->status;
+
+            $returnRequest->update([
+                'status' => 'completed',
+            ]);
+
+            $returnRequest->histories()->create([
+                'from_status' => $from_status,
+                'to_status' => 'completed',
+                'actor_id' => Auth::id(),
+                'actor_type' => 'App\Models\User',
+                'notes' => 'Siklus retur selesai.',
+            ]);
+
+            return back()->with('success', 'Proses retur telah diselesaikan.');
+        });
     }
 }

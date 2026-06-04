@@ -10,8 +10,8 @@ class Order extends Model
         'order_number', 'user_id', 'status', 'fulfillment_type', 'subtotal',
         'shipping_cost', 'discount_amount', 'total_amount', 'shipping_address_snapshot',
         'notes', 'cancelled_at', 'cancelled_reason', 'courier', 'shipping_service', 'tracking_number',
-        'shipped_at', 'delivered_at', 'expired_at',
-        'payment_method', 'payment_status', 'paid_at',
+        'shipped_at', 'delivered_at', 'completed_at', 'expired_at',
+        'payment_method', 'payment_status', 'paid_at', 'refund_status',
     ];
 
     protected $casts = [
@@ -19,6 +19,7 @@ class Order extends Model
         'cancelled_at' => 'datetime',
         'shipped_at' => 'datetime',
         'delivered_at' => 'datetime',
+        'completed_at' => 'datetime',
         'expired_at' => 'datetime',
         'paid_at' => 'datetime',
     ];
@@ -70,12 +71,31 @@ class Order extends Model
         return $this->status === 'pending' && $this->payment_status !== 'paid';
     }
 
-    /**
-     * The return request for this order (if any)
-     */
-    public function returnRequest()
+    public function returnRequests()
     {
-        return $this->hasOne(ReturnRequest::class, 'order_id');
+        return $this->hasMany(ReturnRequest::class, 'order_id');
+    }
+
+    public function getRemainingReturnableItems()
+    {
+        $returnedItemsQty = \Illuminate\Support\Facades\DB::table('return_request_items')
+            ->join('return_requests', 'return_requests.id', '=', 'return_request_items.return_request_id')
+            ->where('return_requests.order_id', $this->id)
+            ->whereNotIn('return_requests.status', ['rejected', 'cancelled'])
+            ->select('order_item_id', \Illuminate\Support\Facades\DB::raw('SUM(quantity) as returned_qty'))
+            ->groupBy('order_item_id')
+            ->get()
+            ->keyBy('order_item_id');
+
+        $remaining = [];
+        foreach ($this->items as $item) {
+            $returned = $returnedItemsQty->has($item->id) ? $returnedItemsQty->get($item->id)->returned_qty : 0;
+            $qty = $item->quantity - $returned;
+            if ($qty > 0) {
+                $remaining[$item->id] = $qty;
+            }
+        }
+        return $remaining;
     }
 
     /**
@@ -83,6 +103,15 @@ class Order extends Model
      */
     public function canBeReturned(): bool
     {
-        return in_array($this->status, ['shipped', 'completed']) && !$this->returnRequest()->exists();
+        if (!in_array($this->status, ['shipped', 'completed'])) {
+            return false;
+        }
+
+        $referenceDate = $this->completed_at ?? $this->delivered_at;
+        if ($referenceDate && $referenceDate->diffInDays(now()) > 7) {
+            return false;
+        }
+
+        return count($this->getRemainingReturnableItems()) > 0;
     }
 }

@@ -20,11 +20,13 @@ const getStatusDisplay = (status) => {
     const displays = {
         'submitted': 'Menunggu Persetujuan',
         'approved': 'Disetujui',
-        'rejected': 'Ditolak',
-        'returned': 'Dikirim Pembeli',
+        'waiting_customer_shipment': 'Menunggu Pengiriman Pembeli',
+        'customer_shipped': 'Dikirim Pembeli',
         'received': 'Diterima Admin',
+        'inspected': 'Diinspeksi',
         'refund_processed': 'Refund Selesai',
         'completed': 'Selesai',
+        'rejected': 'Ditolak',
         'cancelled': 'Dibatalkan',
         'expires': 'Kedaluwarsa'
     };
@@ -33,8 +35,9 @@ const getStatusDisplay = (status) => {
 
 const getStatusClass = (status) => {
     if (status === 'submitted') return 'bg-yellow-100 text-yellow-800';
-    if (status === 'approved') return 'bg-blue-100 text-blue-800';
-    if (status === 'returned' || status === 'received') return 'bg-indigo-100 text-indigo-800';
+    if (status === 'approved' || status === 'waiting_customer_shipment') return 'bg-blue-100 text-blue-800';
+    if (status === 'customer_shipped' || status === 'received') return 'bg-indigo-100 text-indigo-800';
+    if (status === 'inspected') return 'bg-purple-100 text-purple-800';
     if (status === 'refund_processed' || status === 'completed') return 'bg-green-100 text-green-800';
     if (status === 'rejected' || status === 'cancelled' || status === 'expires') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
@@ -57,10 +60,13 @@ const getStatusClass = (status) => {
                         <select v-model="statusFilter" class="border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 rounded-md shadow-sm w-64">
                             <option value="">Semua Status</option>
                             <option value="submitted">Menunggu Persetujuan</option>
-                            <option value="approved">Disetujui (Menunggu Barang)</option>
-                            <option value="returned">Barang Dikirim Pembeli</option>
+                            <option value="approved">Disetujui</option>
+                            <option value="waiting_customer_shipment">Menunggu Pengiriman Pembeli</option>
+                            <option value="customer_shipped">Barang Dikirim Pembeli</option>
                             <option value="received">Barang Diterima Admin</option>
+                            <option value="inspected">Diinspeksi</option>
                             <option value="refund_processed">Refund Selesai</option>
+                            <option value="completed">Selesai</option>
                             <option value="rejected">Ditolak</option>
                         </select>
                     </div>
@@ -72,7 +78,7 @@ const getStatusClass = (status) => {
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No. Retur</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pesanan</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Pelanggan</th>
-                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipe</th>
+                                    <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Inspeksi</th>
                                     <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                                     <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
                                 </tr>
@@ -90,7 +96,9 @@ const getStatusClass = (status) => {
                                         {{ ret.user.name }}
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {{ ret.is_partial ? 'Sebagian' : 'Seluruh' }}
+                                        <span v-if="ret.inspection_result === 'passed'" class="text-green-600 font-bold">Lolos</span>
+                                        <span v-else-if="ret.inspection_result === 'failed'" class="text-red-600 font-bold">Gagal</span>
+                                        <span v-else class="text-gray-400">-</span>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
                                         <span :class="['px-2 inline-flex text-xs leading-5 font-semibold rounded-full', getStatusClass(ret.status)]">

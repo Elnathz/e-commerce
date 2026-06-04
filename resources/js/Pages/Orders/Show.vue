@@ -177,19 +177,31 @@ const submitReview = () => {
 const returning = ref(false);
 const returnForm = useForm({
     reason: '',
-    is_partial: false,
+    items: [],
     images: [],
     agreed_to_terms: false,
 });
+const returnItems = ref([]);
 const previewReturnImages = ref([]);
 
 const openReturnModal = () => {
     returning.value = true;
     returnForm.reason = '';
-    returnForm.is_partial = false;
+    returnForm.items = [];
     returnForm.images = [];
     returnForm.agreed_to_terms = false;
     previewReturnImages.value = [];
+    returnItems.value = props.order.items.map(item => ({
+        selected: false,
+        order_item_id: item.id,
+        product_name: item.product_name_snapshot,
+        variant_name: item.variant_name_snapshot,
+        max_quantity: item.quantity,
+        quantity: 1,
+        reason_code: 'other',
+        reason_notes: '',
+        condition: 'opened'
+    }));
 };
 
 const closeReturnModal = () => {
@@ -202,14 +214,14 @@ const closeReturnModal = () => {
 const handleReturnImageChange = (e) => {
     const files = Array.from(e.target.files);
 
-    if (returnForm.images.length + files.length > 3) {
-        alert('Maksimal 3 foto bukti.');
+    if (returnForm.images.length + files.length > 5) {
+        alert('Maksimal 5 file bukti.');
         return;
     }
 
     files.forEach(file => {
-        if (file.size > 5 * 1024 * 1024) {
-            alert(`Ukuran file ${file.name} terlalu besar (maksimal 5MB).`);
+        if (file.size > 10 * 1024 * 1024) {
+            alert(`Ukuran file ${file.name} terlalu besar (maksimal 10MB).`);
             return;
         }
 
@@ -231,6 +243,13 @@ const removeReturnImage = (index) => {
 };
 
 const submitReturn = () => {
+    const selected = returnItems.value.filter(i => i.selected);
+    if (selected.length === 0) {
+        alert('Silakan pilih minimal satu barang yang ingin dikembalikan.');
+        return;
+    }
+    returnForm.items = selected;
+    
     returnForm.post(route('returns.store', props.order.order_number), {
         preserveScroll: true,
         onSuccess: () => {
@@ -338,11 +357,14 @@ const copyResi = async (resi) => {
 
                             <div v-if="order.status === 'shipped' || order.status === 'completed'" class="mt-4">
                                 <button
-                                    v-if="!order.return_request && (order.status === 'shipped' || order.status === 'completed')"
+                                    v-if="order.can_be_returned_flag"
                                     @click="openReturnModal"
                                     class="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">
                                     Ajukan Pengembalian (Komplain)
                                 </button>
+                                <div v-else-if="!order.return_request" class="w-full text-center text-sm font-semibold text-slate-400 bg-slate-50 py-2 rounded-lg border border-slate-100">
+                                    Batas waktu pengajuan retur (7 hari) telah habis.
+                                </div>
                                 <div v-else-if="order.return_request"
                                     :class="[
                                         'p-4 rounded-xl border text-sm mt-3',
@@ -409,12 +431,12 @@ const copyResi = async (resi) => {
                                                 Lihat Produk
                                             </Link>
 
-                                            <button v-if="order.status === 'completed' && !item.review && (!order.return_request || order.return_request.status === 'rejected')"
+                                            <button v-if="order.status === 'completed' && !item.review && (!order.return_request || order.return_request.status === 'rejected' || !order.return_request.items?.some(ri => ri.order_item_id === item.id))"
                                                 @click="openReviewModal(item)"
                                                 class="mt-2 inline-flex items-center justify-center px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm">
                                                 Beri Ulasan
                                             </button>
-                                            <div v-else-if="order.status === 'completed' && !item.review && order.return_request && order.return_request.status !== 'rejected'"
+                                            <div v-else-if="order.status === 'completed' && !item.review && order.return_request && order.return_request.status !== 'rejected' && order.return_request.items?.some(ri => ri.order_item_id === item.id)"
                                                 class="mt-2 text-xs font-semibold text-red-600 bg-red-50 px-2 py-1.5 rounded-md border border-red-200 text-center">
                                                 Tidak Dapat Diulas (Ada Retur)
                                             </div>
@@ -703,26 +725,62 @@ const copyResi = async (resi) => {
                             }}</p>
                     </div>
 
-                    <!-- Partial Return -->
+                    <!-- Select Items -->
                     <div>
-                        <label class="flex items-center">
-                            <input type="checkbox" v-model="returnForm.is_partial"
-                                class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
-                            <span class="ml-2 text-sm text-slate-700">Pengembalian Sebagian (Hanya beberapa
-                                barang)</span>
-                        </label>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Pilih Barang yang Dikembalikan <span class="text-red-500">*</span></label>
+                        <div class="space-y-3">
+                            <div v-for="(item, idx) in returnItems" :key="idx" class="p-3 border rounded-lg bg-gray-50 flex items-start gap-3">
+                                <input type="checkbox" v-model="item.selected" class="mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500" />
+                                <div class="flex-1 text-sm">
+                                    <div class="font-bold text-slate-900">{{ item.product_name }}</div>
+                                    <div class="text-slate-500 text-xs mb-2">{{ item.variant_name }}</div>
+                                    
+                                    <div v-if="item.selected" class="space-y-3 mt-3 pt-3 border-t">
+                                        <div class="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Jumlah</label>
+                                                <input type="number" v-model.number="item.quantity" min="1" :max="item.max_quantity" class="w-full text-xs rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                                            </div>
+                                            <div>
+                                                <label class="block text-xs font-medium text-slate-700 mb-1">Kondisi</label>
+                                                <select v-model="item.condition" class="w-full text-xs rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                                                    <option value="opened">Sudah Dibuka</option>
+                                                    <option value="damaged">Rusak Fisik</option>
+                                                    <option value="defective">Cacat Fungsi</option>
+                                                    <option value="wrong_item">Salah Barang</option>
+                                                    <option value="other">Lainnya</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 mb-1">Alasan Detail</label>
+                                            <select v-model="item.reason_code" class="w-full text-xs rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 mb-2">
+                                                <option value="defective">Barang Cacat/Rusak</option>
+                                                <option value="wrong_item">Salah Kirim Varian/Warna</option>
+                                                <option value="missing_part">Ada Bagian yang Kurang</option>
+                                                <option value="damaged_shipping">Rusak dalam Pengiriman</option>
+                                                <option value="not_as_described">Tidak Sesuai Deskripsi</option>
+                                                <option value="other">Alasan Lain</option>
+                                            </select>
+                                            <textarea v-model="item.reason_notes" rows="2" placeholder="Catatan tambahan (opsional)..." class="w-full text-xs rounded border-slate-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Photos -->
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Foto Bukti (Wajib, Max 3) <span
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Foto/Video Bukti (Wajib, Max 5, Max 10MB) <span
                                 class="text-red-500">*</span></label>
 
                         <div class="flex flex-wrap gap-3">
                             <!-- Previews -->
                             <div v-for="(preview, idx) in previewReturnImages" :key="idx"
                                 class="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 group">
-                                <img :src="preview" class="w-full h-full object-cover" />
+                                <img v-if="preview.startsWith('data:image')" :src="preview" class="w-full h-full object-cover" />
+                                <video v-else-if="preview.startsWith('data:video')" :src="preview" class="w-full h-full object-cover" autoplay muted loop></video>
                                 <button type="button" @click="removeReturnImage(idx)"
                                     class="absolute inset-0 bg-black/50 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                                     <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -733,9 +791,9 @@ const copyResi = async (resi) => {
                             </div>
 
                             <!-- Upload Button -->
-                            <div v-if="previewReturnImages.length < 3"
+                            <div v-if="previewReturnImages.length < 5"
                                 class="w-20 h-20 rounded-lg border-2 border-dashed border-slate-300 flex items-center justify-center hover:border-indigo-500 hover:bg-indigo-50 transition-colors cursor-pointer relative">
-                                <input type="file" multiple accept="image/jpeg,image/png,image/jpg"
+                                <input type="file" multiple accept="image/jpeg,image/png,image/jpg,image/webp,video/mp4"
                                     @change="handleReturnImageChange"
                                     class="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                                 <svg class="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24"

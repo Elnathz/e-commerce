@@ -17,9 +17,15 @@ const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtit
 
 const openReturnImages = (index) => {
     const images = [];
-    if (props.returnRequest.evidence_image_1) images.push({ url: `/storage/${props.returnRequest.evidence_image_1}` });
-    if (props.returnRequest.evidence_image_2) images.push({ url: `/storage/${props.returnRequest.evidence_image_2}` });
-    if (props.returnRequest.evidence_image_3) images.push({ url: `/storage/${props.returnRequest.evidence_image_3}` });
+    for(let i=1; i<=5; i++){
+        if (props.returnRequest[`evidence_image_${i}`]) {
+            const path = props.returnRequest[`evidence_image_${i}`];
+            if(path.endsWith('.mp4')){
+                // Viewer might not support video, skipping or we could handle it. Let's just push for now if viewer supports it.
+            }
+            images.push({ url: `/storage/${path}` });
+        }
+    }
     openViewer(images, index, 'Bukti Retur', `Order: ${props.returnRequest.order?.order_number || '-'}`);
 };
 
@@ -27,11 +33,13 @@ const getStatusDisplay = (status) => {
     const displays = {
         'submitted': 'Menunggu Persetujuan',
         'approved': 'Disetujui',
-        'rejected': 'Ditolak',
-        'returned': 'Dikirim Pembeli',
+        'waiting_customer_shipment': 'Menunggu Pengiriman Pembeli',
+        'customer_shipped': 'Dikirim Pembeli',
         'received': 'Diterima Admin',
+        'inspected': 'Diinspeksi',
         'refund_processed': 'Refund Selesai',
         'completed': 'Selesai',
+        'rejected': 'Ditolak',
         'cancelled': 'Dibatalkan',
         'expires': 'Kedaluwarsa'
     };
@@ -40,8 +48,9 @@ const getStatusDisplay = (status) => {
 
 const getStatusClass = (status) => {
     if (status === 'submitted') return 'bg-yellow-100 text-yellow-800';
-    if (status === 'approved') return 'bg-blue-100 text-blue-800';
-    if (status === 'returned' || status === 'received') return 'bg-indigo-100 text-indigo-800';
+    if (status === 'approved' || status === 'waiting_customer_shipment') return 'bg-blue-100 text-blue-800';
+    if (status === 'customer_shipped' || status === 'received') return 'bg-indigo-100 text-indigo-800';
+    if (status === 'inspected') return 'bg-purple-100 text-purple-800';
     if (status === 'refund_processed' || status === 'completed') return 'bg-green-100 text-green-800';
     if (status === 'rejected' || status === 'cancelled' || status === 'expires') return 'bg-red-100 text-red-800';
     return 'bg-gray-100 text-gray-800';
@@ -51,19 +60,51 @@ const formatPrice = (price) => {
     return Number(price).toLocaleString('id-ID');
 };
 
+const getReasonCodeDisplay = (code) => {
+    const map = {
+        defective: 'Barang Cacat/Rusak',
+        wrong_item: 'Salah Kirim',
+        missing_part: 'Ada Bagian Kurang',
+        damaged_shipping: 'Rusak Pengiriman',
+        not_as_described: 'Tidak Sesuai Deskripsi',
+        other: 'Lainnya'
+    };
+    return map[code] || code;
+};
+
+const getConditionDisplay = (cond) => {
+    const map = {
+        opened: 'Sudah Dibuka',
+        damaged: 'Rusak Fisik',
+        defective: 'Cacat Fungsi',
+        wrong_item: 'Salah Barang',
+        other: 'Lainnya'
+    };
+    return map[cond] || cond;
+};
+
 // Modals state
 const showApproveModal = ref(false);
 const showRejectModal = ref(false);
 const showReceiveModal = ref(false);
+const showInspectModal = ref(false);
 const showRefundModal = ref(false);
+const showCompleteModal = ref(false);
 
 // Forms
-const approveForm = useForm({
-    refund_amount: props.returnRequest.order.total_amount, // default to full order amount
-});
-
-const rejectForm = useForm({
+const approveForm = useForm({});
+const rejectForm = useForm({ admin_notes: '' });
+const receiveForm = useForm({});
+const completeForm = useForm({});
+const refundForm = useForm({});
+const inspectForm = useForm({
+    inspection_result: 'passed',
     admin_notes: '',
+    items: props.returnRequest.items.map(item => ({
+        id: item.id,
+        refund_amount: 0,
+        restock: false,
+    }))
 });
 
 const submitApprove = () => {
@@ -79,14 +120,26 @@ const submitReject = () => {
 };
 
 const submitReceive = () => {
-    useForm({}).post(route('admin.returns.receive', props.returnRequest.id), {
+    receiveForm.post(route('admin.returns.receive', props.returnRequest.id), {
         onSuccess: () => showReceiveModal.value = false,
     });
 };
 
+const submitInspect = () => {
+    inspectForm.post(route('admin.returns.inspect', props.returnRequest.id), {
+        onSuccess: () => showInspectModal.value = false,
+    });
+};
+
 const submitRefund = () => {
-    useForm({}).post(route('admin.returns.refund', props.returnRequest.id), {
+    refundForm.post(route('admin.returns.refund', props.returnRequest.id), {
         onSuccess: () => showRefundModal.value = false,
+    });
+};
+
+const submitComplete = () => {
+    completeForm.post(route('admin.returns.complete', props.returnRequest.id), {
+        onSuccess: () => showCompleteModal.value = false,
     });
 };
 
@@ -111,11 +164,12 @@ const submitRefund = () => {
                 <!-- Status & Action Banner -->
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border-l-4" :class="{
                     'border-yellow-400': returnRequest.status === 'submitted',
-                    'border-blue-400': returnRequest.status === 'approved',
-                    'border-indigo-400': returnRequest.status === 'returned',
+                    'border-blue-400': returnRequest.status === 'approved' || returnRequest.status === 'waiting_customer_shipment',
+                    'border-indigo-400': returnRequest.status === 'customer_shipped',
                     'border-indigo-600': returnRequest.status === 'received',
-                    'border-green-400': returnRequest.status === 'refund_processed',
-                    'border-red-400': returnRequest.status === 'rejected'
+                    'border-purple-400': returnRequest.status === 'inspected',
+                    'border-green-400': returnRequest.status === 'refund_processed' || returnRequest.status === 'completed',
+                    'border-red-400': returnRequest.status === 'rejected' || returnRequest.status === 'cancelled'
                 }">
                     <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
                         <div>
@@ -124,20 +178,29 @@ const submitRefund = () => {
                         </div>
                         
                         <div class="flex flex-wrap gap-2">
-                            <!-- Actions for 'submitted' -->
                             <template v-if="returnRequest.status === 'submitted'">
                                 <DangerButton @click="showRejectModal = true">Tolak Pengajuan</DangerButton>
                                 <PrimaryButton @click="showApproveModal = true" class="!bg-green-600 hover:!bg-green-700">Setujui Pengajuan</PrimaryButton>
                             </template>
                             
-                            <!-- Actions for 'returned' -->
-                            <template v-if="returnRequest.status === 'returned'">
-                                <PrimaryButton @click="showReceiveModal = true" class="!bg-indigo-600 hover:!bg-indigo-700">Tandai Barang Diterima</PrimaryButton>
+                            <template v-if="returnRequest.status === 'customer_shipped'">
+                                <PrimaryButton @click="showReceiveModal = true" class="!bg-indigo-600 hover:!bg-indigo-700">Terima di Gudang</PrimaryButton>
                             </template>
 
-                            <!-- Actions for 'received' -->
                             <template v-if="returnRequest.status === 'received'">
+                                <PrimaryButton @click="showInspectModal = true" class="!bg-purple-600 hover:!bg-purple-700">Mulai Inspeksi</PrimaryButton>
+                            </template>
+
+                            <template v-if="returnRequest.status === 'inspected' && returnRequest.inspection_result === 'passed'">
                                 <PrimaryButton @click="showRefundModal = true" class="!bg-green-600 hover:!bg-green-700">Proses Pengembalian Dana</PrimaryButton>
+                            </template>
+                            
+                            <template v-if="returnRequest.status === 'inspected' && returnRequest.inspection_result === 'failed'">
+                                <PrimaryButton @click="showCompleteModal = true" class="!bg-gray-800 hover:!bg-black">Selesaikan Tanpa Refund</PrimaryButton>
+                            </template>
+
+                            <template v-if="returnRequest.status === 'refund_processed'">
+                                <PrimaryButton @click="showCompleteModal = true" class="!bg-blue-600 hover:!bg-blue-700">Tandai Selesai</PrimaryButton>
                             </template>
                         </div>
                     </div>
@@ -155,46 +218,88 @@ const submitRefund = () => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <!-- Left: Request Details -->
-                    <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
-                        <h3 class="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Informasi Komplain</h3>
-                        
-                        <div class="space-y-4">
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Alasan</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-2 space-y-6">
+                        <!-- Request Details -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Informasi Retur & Barang</h3>
+                            
+                            <div class="mb-6">
+                                <p class="text-sm font-medium text-gray-500">Catatan/Alasan Umum</p>
                                 <p class="mt-1 text-sm text-gray-900 whitespace-pre-wrap">{{ returnRequest.reason }}</p>
                             </div>
-                            
-                            <div>
-                                <p class="text-sm font-medium text-gray-500">Tipe Pengembalian</p>
-                                <p class="mt-1 text-sm text-gray-900 font-bold">
-                                    {{ returnRequest.is_partial ? 'Pengembalian Sebagian (Parsial)' : 'Pengembalian Seluruh Pesanan (Full)' }}
-                                </p>
-                            </div>
 
-                            <div v-if="returnRequest.admin_notes">
+                            <div v-if="returnRequest.admin_notes" class="mb-6">
                                 <p class="text-sm font-medium text-gray-500">Catatan Admin</p>
-                                <p class="mt-1 text-sm text-red-600 bg-red-50 p-3 rounded">{{ returnRequest.admin_notes }}</p>
+                                <p class="mt-1 text-sm text-red-600 bg-red-50 p-3 rounded border border-red-100">{{ returnRequest.admin_notes }}</p>
                             </div>
 
-                            <div v-if="returnRequest.refund_amount">
-                                <p class="text-sm font-medium text-gray-500">Jumlah Dana Dikembalikan</p>
-                                <p class="mt-1 text-lg font-bold text-green-600">Rp {{ formatPrice(returnRequest.refund_amount) }}</p>
+                            <div class="overflow-x-auto rounded-xl border border-gray-200">
+                                <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                    <thead class="bg-gray-50">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold text-gray-700">Barang</th>
+                                            <th class="px-4 py-3 text-left font-semibold text-gray-700">Qty</th>
+                                            <th class="px-4 py-3 text-left font-semibold text-gray-700">Alasan Detail</th>
+                                            <th class="px-4 py-3 text-left font-semibold text-gray-700">Kondisi</th>
+                                            <th class="px-4 py-3 text-right font-semibold text-gray-700">Refund Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200 bg-white">
+                                        <tr v-for="item in returnRequest.items" :key="item.id">
+                                            <td class="px-4 py-3">
+                                                <div class="font-medium text-gray-900">{{ returnRequest.order.items.find(i => i.id === item.order_item_id)?.product_name_snapshot }}</div>
+                                                <div class="text-xs text-gray-500">{{ returnRequest.order.items.find(i => i.id === item.order_item_id)?.variant_name_snapshot }}</div>
+                                            </td>
+                                            <td class="px-4 py-3 font-medium">{{ item.quantity }}</td>
+                                            <td class="px-4 py-3">
+                                                <div>{{ getReasonCodeDisplay(item.reason_code) }}</div>
+                                                <div class="text-xs text-gray-500 mt-1" v-if="item.reason_notes">"{{ item.reason_notes }}"</div>
+                                            </td>
+                                            <td class="px-4 py-3">{{ getConditionDisplay(item.condition) }}</td>
+                                            <td class="px-4 py-3 text-right font-bold text-green-600">Rp {{ formatPrice(item.refund_amount) }}</td>
+                                        </tr>
+                                    </tbody>
+                                    <tfoot v-if="returnRequest.refund_amount" class="bg-green-50 border-t border-green-200">
+                                        <tr>
+                                            <td colspan="4" class="px-4 py-3 text-right font-bold text-green-800">Total Refund:</td>
+                                            <td class="px-4 py-3 text-right font-bold text-green-800">Rp {{ formatPrice(returnRequest.refund_amount) }}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
-                            
-                            <div>
-                                <p class="text-sm font-medium text-gray-500 mb-2">Foto Bukti dari Pelanggan</p>
+
+                            <div class="mt-6">
+                                <p class="text-sm font-medium text-gray-500 mb-2">Media Bukti</p>
                                 <div class="flex flex-wrap gap-4">
-                                    <button type="button" v-if="returnRequest.evidence_image_1" @click="openReturnImages(0)" class="focus:outline-none">
-                                        <img :src="`/storage/${returnRequest.evidence_image_1}`" class="w-24 h-24 object-cover rounded border hover:opacity-75 cursor-zoom-in">
-                                    </button>
-                                    <button type="button" v-if="returnRequest.evidence_image_2" @click="openReturnImages(returnRequest.evidence_image_1 ? 1 : 0)" class="focus:outline-none">
-                                        <img :src="`/storage/${returnRequest.evidence_image_2}`" class="w-24 h-24 object-cover rounded border hover:opacity-75 cursor-zoom-in">
-                                    </button>
-                                    <button type="button" v-if="returnRequest.evidence_image_3" @click="openReturnImages((returnRequest.evidence_image_1 ? 1 : 0) + (returnRequest.evidence_image_2 ? 1 : 0))" class="focus:outline-none">
-                                        <img :src="`/storage/${returnRequest.evidence_image_3}`" class="w-24 h-24 object-cover rounded border hover:opacity-75 cursor-zoom-in">
-                                    </button>
+                                    <template v-for="i in 5" :key="i">
+                                        <div v-if="returnRequest[`evidence_image_${i}`]" class="relative w-24 h-24 rounded overflow-hidden border">
+                                            <video v-if="returnRequest[`evidence_image_${i}`].endsWith('.mp4')" :src="`/storage/${returnRequest['evidence_image_' + i]}`" class="w-full h-full object-cover" controls></video>
+                                            <img v-else :src="`/storage/${returnRequest['evidence_image_' + i]}`" class="w-full h-full object-cover hover:opacity-75 cursor-zoom-in" @click="openReturnImages(i-1)">
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Histories -->
+                        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
+                            <h3 class="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Riwayat (Audit Trail)</h3>
+                            <div class="space-y-4">
+                                <div v-for="history in returnRequest.histories" :key="history.id" class="flex gap-4">
+                                    <div class="flex flex-col items-center">
+                                        <div class="w-3 h-3 bg-indigo-500 rounded-full mt-1.5"></div>
+                                        <div class="w-px h-full bg-indigo-100 my-1"></div>
+                                    </div>
+                                    <div class="pb-2">
+                                        <div class="text-xs text-gray-500 mb-0.5">{{ new Date(history.created_at).toLocaleString('id-ID') }}</div>
+                                        <div class="text-sm font-semibold text-gray-900">
+                                            Status: <span class="bg-gray-100 px-2 py-0.5 rounded ml-1">{{ getStatusDisplay(history.from_status) || '-' }} &rarr; {{ getStatusDisplay(history.to_status) }}</span>
+                                        </div>
+                                        <div class="text-sm text-gray-700 mt-1 bg-gray-50 p-2 rounded inline-block" v-if="history.notes">
+                                            {{ history.notes }}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -216,28 +321,12 @@ const submitRefund = () => {
                                 <p class="text-sm font-medium text-gray-500">Total Pembayaran Pesanan</p>
                                 <p class="text-sm font-bold text-gray-900">Rp {{ formatPrice(returnRequest.order.total_amount) }}</p>
                             </div>
-
-                            <div>
-                                <p class="text-sm font-medium text-gray-500 mb-2">Barang dalam Pesanan</p>
-                                <ul class="divide-y divide-gray-200">
-                                    <li v-for="item in returnRequest.order.items" :key="item.id" class="py-2 flex justify-between">
-                                        <div class="text-sm">
-                                            <p class="font-medium text-gray-900">{{ item.product_name_snapshot }}</p>
-                                            <p class="text-xs text-gray-500">Var: {{ item.variant_name_snapshot }}</p>
-                                        </div>
-                                        <div class="text-sm font-medium text-gray-900">
-                                            {{ item.quantity }} x Rp {{ formatPrice(item.unit_price) }}
-                                        </div>
-                                    </li>
-                                </ul>
-                            </div>
                         </div>
 
                         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6">
                             <h3 class="text-lg font-bold text-gray-900 mb-4 border-b pb-2">Informasi Pelanggan</h3>
                             <p class="text-sm font-medium text-gray-900">{{ returnRequest.user.name }}</p>
                             <p class="text-sm text-gray-500">{{ returnRequest.user.email }}</p>
-                            <p class="text-sm text-gray-500 mt-2">Didaftarkan pada: {{ new Date(returnRequest.user.created_at).toLocaleDateString('id-ID') }}</p>
                         </div>
                     </div>
                 </div>
@@ -249,15 +338,9 @@ const submitRefund = () => {
             <div class="p-6">
                 <h2 class="text-lg font-bold text-gray-900 mb-4">Setujui Pengajuan Retur</h2>
                 <p class="text-sm text-gray-600 mb-4">
-                    Dengan menyetujui, pelanggan akan diminta untuk mengirimkan barang kembali ke gudang. Silakan tentukan estimasi jumlah dana yang akan dikembalikan.
+                    Dengan menyetujui, status akan berubah menjadi "Disetujui" dan pelanggan akan diminta untuk mengirimkan barang ke gudang.
                 </p>
                 <form @submit.prevent="submitApprove">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Jumlah Dana (Rp)</label>
-                        <input type="number" v-model="approveForm.refund_amount" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required min="0">
-                        <p v-if="approveForm.errors.refund_amount" class="text-sm text-red-600 mt-1">{{ approveForm.errors.refund_amount }}</p>
-                        <p class="text-xs text-gray-500 mt-1">Total Pesanan Asli: Rp {{ formatPrice(returnRequest.order.total_amount) }}</p>
-                    </div>
                     <div class="flex justify-end gap-3 mt-6">
                         <SecondaryButton type="button" @click="showApproveModal = false">Batal</SecondaryButton>
                         <PrimaryButton type="submit" class="!bg-green-600 hover:!bg-green-700" :disabled="approveForm.processing">Setujui Retur</PrimaryButton>
@@ -277,7 +360,6 @@ const submitRefund = () => {
                     <div class="mb-4">
                         <label class="block text-sm font-medium text-gray-700">Alasan Penolakan</label>
                         <textarea v-model="rejectForm.admin_notes" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" required></textarea>
-                        <p v-if="rejectForm.errors.admin_notes" class="text-sm text-red-600 mt-1">{{ rejectForm.errors.admin_notes }}</p>
                     </div>
                     <div class="flex justify-end gap-3 mt-6">
                         <SecondaryButton type="button" @click="showRejectModal = false">Batal</SecondaryButton>
@@ -287,17 +369,12 @@ const submitRefund = () => {
             </div>
         </Modal>
 
-        <!-- Receive Confirmation Modal -->
+        <!-- Receive Modal -->
         <Modal :show="showReceiveModal" @close="showReceiveModal = false" maxWidth="md">
             <div class="p-6 text-center">
-                <div class="w-16 h-16 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 3.75H6.912a2.25 2.25 0 0 0-2.15 1.588L2.35 13.177a2.25 2.25 0 0 0-.1.661V18a2.25 2.25 0 0 0 2.25 2.25h15A2.25 2.25 0 0 0 21.75 18v-4.162c0-.224-.034-.447-.1-.661L19.24 5.338a2.25 2.25 0 0 0-2.15-1.588H15M2.25 13.5h3.86a2.25 2.25 0 0 1 2.008 1.24l.885 1.77a2.25 2.25 0 0 0 2.007 1.24h1.98a2.25 2.25 0 0 0 2.007-1.24l.885-1.77a2.25 2.25 0 0 1 2.007-1.24h3.86m-18 0h18" />
-                    </svg>
-                </div>
                 <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Terima Barang</h3>
                 <p class="text-sm text-gray-600 mb-6">
-                    Apakah Anda yakin barang retur dengan nomor <strong>{{ returnRequest.return_number }}</strong> telah diterima dengan baik di gudang?
+                    Apakah Anda yakin barang retur telah tiba di gudang?
                 </p>
                 <div class="flex justify-center gap-3">
                     <SecondaryButton type="button" @click="showReceiveModal = false" class="px-5">Batal</SecondaryButton>
@@ -306,26 +383,78 @@ const submitRefund = () => {
             </div>
         </Modal>
 
-        <!-- Refund Confirmation Modal -->
+        <!-- Inspect Modal -->
+        <Modal :show="showInspectModal" @close="showInspectModal = false" maxWidth="2xl">
+            <div class="p-6">
+                <h2 class="text-lg font-bold text-gray-900 mb-4">Inspeksi Barang Retur</h2>
+                <p class="text-sm text-gray-600 mb-6">
+                    Lakukan pemeriksaan fisik terhadap barang yang diretur. Tentukan apakah lolos inspeksi, jumlah refund per-item, dan apakah stok akan dimasukkan kembali.
+                </p>
+                <form @submit.prevent="submitInspect">
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-gray-900 mb-2">Hasil Inspeksi Akhir</label>
+                        <select v-model="inspectForm.inspection_result" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                            <option value="passed">Lolos Inspeksi (Lanjut Refund)</option>
+                            <option value="failed">Gagal Inspeksi (Tolak Refund, Barang Bodong/Rusak Parah)</option>
+                        </select>
+                    </div>
+
+                    <div v-if="inspectForm.inspection_result === 'passed'" class="space-y-4 mb-6">
+                        <h3 class="font-bold text-gray-700">Tentukan Refund per Item:</h3>
+                        <div v-for="(item, idx) in returnRequest.items" :key="item.id" class="p-4 bg-gray-50 border rounded-lg">
+                            <div class="font-semibold text-sm mb-2">{{ returnRequest.order.items.find(i => i.id === item.order_item_id)?.product_name_snapshot }}</div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700">Nominal Refund (Rp)</label>
+                                    <input type="number" v-model="inspectForm.items[idx].refund_amount" min="0" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                </div>
+                                <div class="flex items-center pt-6">
+                                    <label class="flex items-center cursor-pointer">
+                                        <input type="checkbox" v-model="inspectForm.items[idx].restock" class="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500">
+                                        <span class="ml-2 text-sm text-gray-700 font-medium">Restock Barang</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-6">
+                        <label class="block text-sm font-bold text-gray-900 mb-2">Catatan Inspeksi</label>
+                        <textarea v-model="inspectForm.admin_notes" rows="3" class="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" placeholder="Catatan opsional..."></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-3">
+                        <SecondaryButton type="button" @click="showInspectModal = false">Batal</SecondaryButton>
+                        <PrimaryButton type="submit" class="!bg-purple-600 hover:!bg-purple-700" :disabled="inspectForm.processing">Simpan Hasil Inspeksi</PrimaryButton>
+                    </div>
+                </form>
+            </div>
+        </Modal>
+
+        <!-- Refund Modal -->
         <Modal :show="showRefundModal" @close="showRefundModal = false" maxWidth="md">
             <div class="p-6 text-center">
-                <div class="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4 text-green-600">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-8 h-8">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                    </svg>
-                </div>
                 <h3 class="text-lg font-bold text-gray-900 mb-2">Konfirmasi Pengembalian Dana</h3>
                 <p class="text-sm text-gray-600 mb-4">
-                    Anda akan memproses pengembalian dana sebesar <span class="font-bold text-green-600">Rp {{ formatPrice(returnRequest.refund_amount) }}</span> untuk pesanan <strong>{{ returnRequest.order.order_number }}</strong>.
+                    Anda akan memproses pengembalian dana sebesar <span class="font-bold text-green-600">Rp {{ formatPrice(returnRequest.refund_amount) }}</span>.
                 </p>
-                <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-6 text-left">
-                    <p class="text-xs text-amber-800 leading-relaxed font-medium">
-                        ⚠️ <strong>PENTING:</strong> Tindakan ini akan secara otomatis memperbarui status pesanan menjadi <strong>Refunded</strong>. Pastikan transfer dana telah berhasil diproses.
-                    </p>
-                </div>
-                <div class="flex justify-center gap-3">
+                <div class="flex justify-center gap-3 mt-6">
                     <SecondaryButton type="button" @click="showRefundModal = false" class="px-5">Batal</SecondaryButton>
                     <PrimaryButton type="button" @click="submitRefund" class="!bg-green-600 hover:!bg-green-700 px-5">Ya, Proses Refund</PrimaryButton>
+                </div>
+            </div>
+        </Modal>
+
+        <!-- Complete Modal -->
+        <Modal :show="showCompleteModal" @close="showCompleteModal = false" maxWidth="md">
+            <div class="p-6 text-center">
+                <h3 class="text-lg font-bold text-gray-900 mb-2">Selesaikan Retur</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    Apakah Anda yakin ingin menyelesaikan proses retur ini?
+                </p>
+                <div class="flex justify-center gap-3 mt-6">
+                    <SecondaryButton type="button" @click="showCompleteModal = false" class="px-5">Batal</SecondaryButton>
+                    <PrimaryButton type="button" @click="submitComplete" class="!bg-blue-600 hover:!bg-blue-700 px-5">Selesaikan</PrimaryButton>
                 </div>
             </div>
         </Modal>
