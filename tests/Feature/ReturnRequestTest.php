@@ -9,6 +9,7 @@ use App\Models\ProductVariant;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ReturnRequest;
+use App\Models\ReturnRequestItem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -64,6 +65,7 @@ class ReturnRequestTest extends TestCase
             'order_number' => 'ORD-TEST-123',
             'user_id' => $this->user->id,
             'status' => 'completed',
+            'completed_at' => now(), // Needed for 7 day eligibility
             'fulfillment_type' => 'delivery',
             'subtotal' => 90000,
             'shipping_cost' => 10000,
@@ -89,7 +91,14 @@ class ReturnRequestTest extends TestCase
     {
         $response = $this->actingAs($this->user)->post(route('returns.store', $this->order->order_number), [
             'reason' => 'Defective product',
-            'is_partial' => false,
+            'items' => [
+                [
+                    'order_item_id' => $this->orderItem->id,
+                    'quantity' => 1,
+                    'reason_code' => 'defective',
+                    'condition' => 'opened',
+                ]
+            ],
             'images' => [
                 UploadedFile::fake()->image('evidence.jpg'),
             ],
@@ -99,6 +108,7 @@ class ReturnRequestTest extends TestCase
         $this->assertNotNull($returnRequest);
         $this->assertEquals('submitted', $returnRequest->status);
         $this->assertEquals('Defective product', $returnRequest->reason);
+        $this->assertCount(1, $returnRequest->items);
         $response->assertRedirect(route('returns.show', $returnRequest->return_number));
     }
 
@@ -108,20 +118,40 @@ class ReturnRequestTest extends TestCase
             'return_number' => 'RET-TEST-123',
             'order_id' => $this->order->id,
             'user_id' => $this->user->id,
-            'status' => 'submitted',
+            'status' => 'received',
             'reason' => 'Defective product',
             'evidence_image_1' => 'returns/test.jpg',
         ]);
 
-        // Approve with valid refund amount (less than or equal to total_amount)
-        $response = $this->actingAs($this->admin)->post(route('admin.returns.approve', $returnRequest->id), [
-            'refund_amount' => 50000,
+        $returnItem = ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $this->orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
+        ]);
+
+        // Admin inspects and sets refund amount
+        $response = $this->actingAs($this->admin)->post(route('admin.returns.inspect', $returnRequest->id), [
+            'inspection_result' => 'passed',
+            'items' => [
+                [
+                    'id' => $returnItem->id,
+                    'refund_amount' => 50000,
+                    'restock' => true,
+                ]
+            ],
+            'admin_notes' => 'Passed inspection',
         ]);
 
         $response->assertSessionHasNoErrors();
         $returnRequest->refresh();
-        $this->assertEquals('approved', $returnRequest->status);
-        $this->assertEquals(50000, $returnRequest->refund_amount);
+        $this->assertEquals('inspected', $returnRequest->status);
+        $this->assertEquals('passed', $returnRequest->inspection_result);
+        
+        $returnItem->refresh();
+        $this->assertEquals(50000, $returnItem->refund_amount);
+        $this->assertTrue((bool) $returnItem->is_restocked);
     }
 
     public function test_admin_cannot_approve_return_request_exceeding_limits(): void
@@ -130,19 +160,35 @@ class ReturnRequestTest extends TestCase
             'return_number' => 'RET-TEST-123',
             'order_id' => $this->order->id,
             'user_id' => $this->user->id,
-            'status' => 'submitted',
+            'status' => 'received',
             'reason' => 'Defective product',
             'evidence_image_1' => 'returns/test.jpg',
         ]);
 
-        // Attempt to approve with refund amount exceeding the order total_amount (100000)
-        $response = $this->actingAs($this->admin)->post(route('admin.returns.approve', $returnRequest->id), [
-            'refund_amount' => 150000,
+        $returnItem = ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $this->orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
         ]);
 
-        $response->assertSessionHasErrors(['refund_amount']);
+        // Attempt to inspect with refund amount exceeding the order subtotal/total_amount (90000 for item)
+        $response = $this->actingAs($this->admin)->post(route('admin.returns.inspect', $returnRequest->id), [
+            'inspection_result' => 'passed',
+            'items' => [
+                [
+                    'id' => $returnItem->id,
+                    'refund_amount' => 150000,
+                    'restock' => true,
+                ]
+            ],
+            'admin_notes' => 'Passed inspection',
+        ]);
+
+        $response->assertSessionHasErrors(['items.0.refund_amount']);
         $returnRequest->refresh();
-        $this->assertEquals('submitted', $returnRequest->status); // Status remains unchanged
+        $this->assertEquals('received', $returnRequest->status); // Status remains unchanged
     }
 
     public function test_full_return_workflow(): void
@@ -156,34 +202,60 @@ class ReturnRequestTest extends TestCase
             'evidence_image_1' => 'returns/test.jpg',
         ]);
 
-        // 1. Admin Approve
-        $this->actingAs($this->admin)->post(route('admin.returns.approve', $returnRequest->id), [
-            'refund_amount' => 90000,
+        $returnItem = ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $this->orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
         ]);
+
+        // 1. Admin Approve
+        $this->actingAs($this->admin)->post(route('admin.returns.approve', $returnRequest->id));
         $returnRequest->refresh();
         $this->assertEquals('approved', $returnRequest->status);
 
         // 2. Customer inputs tracking info
-        $this->actingAs($this->user)->post(route('returns.tracking', $returnRequest->return_number), [
+        $response = $this->actingAs($this->user)->post(route('returns.tracking', $returnRequest->return_number), [
             'return_courier' => 'JNE',
             'return_tracking_number' => 'JNETEST123',
         ]);
+        if ($returnRequest->fresh()->status !== 'customer_shipped') {
+            dump($response->getContent());
+            $response->dumpSession();
+        }
+        $response->assertSessionHasNoErrors();
         $returnRequest->refresh();
-        $this->assertEquals('returned', $returnRequest->status);
+        $this->assertEquals('customer_shipped', $returnRequest->status);
 
         // 3. Admin receives the goods
         $this->actingAs($this->admin)->post(route('admin.returns.receive', $returnRequest->id));
         $returnRequest->refresh();
         $this->assertEquals('received', $returnRequest->status);
 
-        // 4. Admin processes the refund
+        // 4. Admin inspects
+        $this->actingAs($this->admin)->post(route('admin.returns.inspect', $returnRequest->id), [
+            'inspection_result' => 'passed',
+            'items' => [
+                [
+                    'id' => $returnItem->id,
+                    'refund_amount' => 90000,
+                    'restock' => true,
+                ]
+            ]
+        ]);
+        $returnRequest->refresh();
+        $this->assertEquals('inspected', $returnRequest->status);
+
+        // 5. Admin processes the refund
         $this->actingAs($this->admin)->post(route('admin.returns.refund', $returnRequest->id));
         $returnRequest->refresh();
         $this->assertEquals('refund_processed', $returnRequest->status);
 
-        // Order status should be refunded
-        $this->order->refresh();
-        $this->assertEquals('refunded', $this->order->status);
+        // 6. Admin completes
+        $this->actingAs($this->admin)->post(route('admin.returns.complete', $returnRequest->id));
+        $returnRequest->refresh();
+        $this->assertEquals('completed', $returnRequest->status);
     }
 
     public function test_active_return_is_hidden_from_completed_tab(): void
@@ -195,6 +267,14 @@ class ReturnRequestTest extends TestCase
             'status' => 'submitted',
             'reason' => 'Defective product',
             'evidence_image_1' => 'returns/test.jpg',
+        ]);
+
+        ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $this->orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
         ]);
 
         // When requesting completed tab

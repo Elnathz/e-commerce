@@ -36,7 +36,7 @@ class ReturnRequest extends Model
             'approved' => ['waiting_customer_shipment', 'expires'],
             'waiting_customer_shipment' => ['customer_shipped', 'expires'],
             'customer_shipped' => ['received'],
-            'received' => ['inspected'],
+            'received' => ['inspected', 'rejected'],
             'inspected' => ['refund_processed', 'completed'],
             'refund_processed' => ['completed'],
         ];

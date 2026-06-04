@@ -17,7 +17,7 @@ class OrderController extends Controller
         $status = $request->query('status', 'all');
 
         $query = Order::where('user_id', Auth::id())
-            ->with(['items.productVariant.product.images', 'items.productVariant.images', 'returnRequest'])
+            ->with(['items.productVariant.product.images', 'items.productVariant.images', 'returnRequests'])
             ->withCount([
                 'items',
                 'items as reviewed_items_count' => function ($q) {
@@ -29,7 +29,7 @@ class OrderController extends Controller
 
         // Helper closure untuk mengecualikan retur aktif
         $excludeActiveReturns = function ($q) {
-            $q->whereDoesntHave('returnRequest', function ($q) {
+            $q->whereDoesntHave('returnRequests', function ($q) {
                 $q->whereNotIn('status', ['rejected', 'cancelled']);
             });
         };
@@ -43,7 +43,7 @@ class OrderController extends Controller
         } elseif ($status === 'completed') {
             $query->where('status', 'completed')->where($excludeActiveReturns);
         } elseif ($status === 'returned') {
-            $query->whereHas('returnRequest', function ($q) {
+            $query->whereHas('returnRequests', function ($q) {
                 $q->whereNotIn('status', ['rejected', 'cancelled', 'refund_processed']);
             });
         } elseif ($status === 'cancelled') {
@@ -65,13 +65,14 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', Auth::id())
             ->where('order_number', $order_number)
-            ->with(['items.productVariant.product', 'items.review.images', 'returnRequest.items', 'payments' => function($q) {
+            ->with(['items.productVariant.product', 'items.review.images', 'returnRequests.items', 'payments' => function($q) {
                 $q->latest();
             }])
             ->firstOrFail();
 
         // We also append a custom attribute to pass to frontend
         $order->can_be_returned_flag = $order->canBeReturned();
+        $order->append('return_request');
 
         return Inertia::render('Orders/Show', [
             'order' => $order

@@ -8,6 +8,11 @@ const props = defineProps({
     currentStatus: String
 });
 
+const getActiveReturn = (order) => {
+    if (!order.returnRequests || order.returnRequests.length === 0) return null;
+    return order.returnRequests[order.returnRequests.length - 1];
+};
+
 const statuses = [
     { value: 'all', label: 'Semua' },
     { value: 'pending', label: 'Belum Bayar' },
@@ -26,17 +31,20 @@ const getStatusDisplay = (order) => {
     if (order.status === 'refunded') return 'Pengembalian Selesai';
     if (order.status === 'cancelled') return 'Dibatalkan';
     
-    if (order.return_request) {
-        if (order.return_request.status === 'rejected') {
+    const activeReturn = getActiveReturn(order);
+    if (activeReturn) {
+        if (activeReturn.status === 'rejected') {
             return order.status === 'completed' ? 'Selesai' : 'Dikirim';
         }
-        if (order.return_request.status === 'cancelled') return 'Retur Dibatalkan';
+        if (activeReturn.status === 'cancelled') return 'Retur Dibatalkan';
         
-        switch(order.return_request.status) {
+        switch(activeReturn.status) {
             case 'submitted': return 'Sedang Diretur';
             case 'approved': return 'Retur Disetujui';
-            case 'returned': return 'Menunggu Barang Kembali';
+            case 'waiting_customer_shipment': return 'Menunggu Resi Pelanggan';
+            case 'customer_shipped': return 'Dikirim oleh Pelanggan';
             case 'received': return 'Barang Diterima Admin';
+            case 'inspected': return 'Menunggu Proses Refund';
             case 'refund_processed': return 'Refund Diproses';
         }
     }
@@ -52,8 +60,9 @@ const getStatusDisplay = (order) => {
 const getStatusClass = (order) => {
     if (order.status === 'refunded' || order.status === 'cancelled') return 'bg-red-100 text-red-800';
     
-    if (order.return_request) {
-        if (order.return_request.status === 'rejected') {
+    const activeReturn = getActiveReturn(order);
+    if (activeReturn) {
+        if (activeReturn.status === 'rejected') {
             // Revert to original class, but we could add border if needed
         } else {
             return 'bg-orange-100 text-orange-800 border border-orange-300';
@@ -160,15 +169,15 @@ const getPrimaryImage = (item) => {
                                     <h3 class="font-bold text-slate-900 line-clamp-1">{{ order.items[0].product_name_snapshot }}</h3>
                                     <p class="text-sm text-slate-500">{{ order.items[0].quantity }} barang x Rp {{ formatPrice(order.items[0].unit_price) }}</p>
                                     <p v-if="order.items.length > 1" class="text-xs font-semibold text-blue-600 mt-1">+ {{ order.items.length - 1 }} barang lainnya</p>
-                                    <p v-if="order.return_request" 
-                                       :class="['text-xs font-bold mt-1.5 flex items-center gap-1.5', order.return_request.status === 'rejected' ? 'text-gray-500' : 'text-orange-600']">
-                                        <svg v-if="order.return_request.status === 'rejected'" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <p v-if="getActiveReturn(order)" 
+                                       :class="['text-xs font-bold mt-1.5 flex items-center gap-1.5', getActiveReturn(order).status === 'rejected' ? 'text-gray-500' : 'text-orange-600']">
+                                        <svg v-if="getActiveReturn(order).status === 'rejected'" class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
                                         <svg v-else class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
                                         </svg>
-                                        {{ order.return_request.status === 'rejected' ? 'Pernah Diajukan Retur (Ditolak)' : (order.return_request.is_partial ? 'Retur Sebagian' : '1 Pesanan Diretur') }}
+                                        {{ getActiveReturn(order).status === 'rejected' ? 'Pernah Diajukan Retur (Ditolak)' : 'Sedang Diretur / Sudah Retur' }}
                                     </p>
                                     
                                     <!-- Review Status -->
@@ -199,7 +208,7 @@ const getPrimaryImage = (item) => {
                             </div>
                             
                             <div class="w-full sm:w-auto flex flex-col gap-2.5">
-                                <Link v-if="order.return_request" :href="route('returns.show', order.return_request.return_number)">
+                                <Link v-if="getActiveReturn(order)" :href="route('returns.show', getActiveReturn(order).return_number)">
                                     <PrimaryButton class="w-full justify-center !bg-orange-50 !text-orange-700 border border-orange-200 hover:!bg-orange-100 !rounded-xl shadow-sm">
                                         Lihat Status Retur
                                     </PrimaryButton>

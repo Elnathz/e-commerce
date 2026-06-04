@@ -128,14 +128,34 @@ class ReturnController extends Controller
             'inspection_result' => 'required|in:passed,failed',
             'items' => 'required_if:inspection_result,passed|array',
             'items.*.id' => 'required|exists:return_request_items,id',
-            'items.*.refund_amount' => 'required|numeric|min:0',
+            'items.*.refund_amount' => [
+                'required',
+                'numeric',
+                'min:0',
+                function ($attribute, $value, $fail) use ($returnRequest) {
+                    preg_match('/items\.(\d+)\.refund_amount/', $attribute, $matches);
+                    if (isset($matches[1])) {
+                        $index = $matches[1];
+                        $itemId = request("items.$index.id");
+                        $item = $returnRequest->items()->with('orderItem')->find($itemId);
+                        if ($item && $item->orderItem) {
+                            $maxRefund = $item->quantity * $item->orderItem->unit_price;
+                            if ($value > $maxRefund) {
+                                $fail("The refund amount cannot exceed the maximum value of Rp " . number_format($maxRefund, 0, ',', '.'));
+                            }
+                        }
+                    }
+                }
+            ],
             'items.*.restock' => 'boolean',
             'admin_notes' => 'nullable|string|max:1000',
         ]);
 
         return DB::transaction(function() use ($request, $returnRequest) {
             $returnRequest = ReturnRequest::lockForUpdate()->find($returnRequest->id);
-            if (!$returnRequest->canTransitionTo('inspected')) {
+            $newStatus = $request->inspection_result === 'failed' ? 'rejected' : 'inspected';
+
+            if (!$returnRequest->canTransitionTo($newStatus)) {
                 return back()->with('error', 'Transisi status tidak diizinkan.');
             }
 
@@ -162,7 +182,7 @@ class ReturnController extends Controller
             }
 
             $returnRequest->update([
-                'status' => 'inspected',
+                'status' => $newStatus,
                 'inspection_result' => $request->inspection_result,
                 'refund_amount' => $total_refund,
                 'admin_notes' => $request->admin_notes ?? $returnRequest->admin_notes,
@@ -170,7 +190,7 @@ class ReturnController extends Controller
 
             $returnRequest->histories()->create([
                 'from_status' => $from_status,
-                'to_status' => 'inspected',
+                'to_status' => $newStatus,
                 'actor_id' => Auth::id(),
                 'actor_type' => 'App\Models\User',
                 'notes' => 'Inspeksi selesai dengan hasil: ' . strtoupper($request->inspection_result) . '. ' . $request->admin_notes,

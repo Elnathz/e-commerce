@@ -1,7 +1,7 @@
 <script setup>
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import DangerButton from '@/Components/DangerButton.vue';
@@ -13,6 +13,11 @@ const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtit
 
 const props = defineProps({
     order: Object,
+});
+
+const activeReturnRequest = computed(() => {
+    if (!props.order.returnRequests || props.order.returnRequests.length === 0) return null;
+    return props.order.returnRequests[props.order.returnRequests.length - 1];
 });
 
 const formatPrice = (price) => {
@@ -362,26 +367,29 @@ const copyResi = async (resi) => {
                                     class="w-full text-center text-sm font-bold text-slate-500 hover:text-slate-700 transition-colors">
                                     Ajukan Pengembalian (Komplain)
                                 </button>
-                                <div v-else-if="!order.return_request" class="w-full text-center text-sm font-semibold text-slate-400 bg-slate-50 py-2 rounded-lg border border-slate-100">
+                                <div v-else-if="!activeReturnRequest" class="w-full text-center text-sm font-semibold text-slate-400 bg-slate-50 py-2 rounded-lg border border-slate-100">
                                     Batas waktu pengajuan retur (7 hari) telah habis.
                                 </div>
-                                <div v-else-if="order.return_request"
+                                <div v-else-if="activeReturnRequest"
                                     :class="[
-                                        'p-4 rounded-xl border text-sm mt-3',
-                                        order.return_request.status === 'rejected' ? 'bg-gray-50 border-gray-200 text-gray-700' : 'bg-orange-50 border-orange-200 text-orange-800'
-                                    ]">
-                                    <div class="flex items-center gap-2 mb-1.5 font-bold">
-                                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span class="uppercase tracking-wide">{{ order.return_request.status === 'rejected' ? 'Retur Ditolak' : 'Status Retur: ' + order.return_request.status.replace('_', ' ') }}</span>
+                                        'w-full py-2.5 px-4 rounded-xl border text-sm',
+                                        activeReturnRequest.status === 'rejected' ? 'bg-gray-50 border-gray-200 text-gray-700' : 'bg-orange-50 border-orange-200 text-orange-800'
+                                    ]"
+                                >
+                                    <div class="flex items-center justify-between font-semibold mb-1">
+                                        <div class="flex items-center gap-2">
+                                            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                                            </svg>
+                                        <span class="uppercase tracking-wide">{{ activeReturnRequest.status === 'rejected' ? 'Retur Ditolak' : 'Status Retur: ' + activeReturnRequest.status.replace('_', ' ') }}</span>
+                                        </div>
                                     </div>
-                                    <p v-if="order.return_request.status === 'rejected'" class="text-gray-600 font-normal mb-2 text-xs">
-                                        Pengajuan retur Anda pada tanggal {{ new Date(order.return_request.created_at).toLocaleDateString('id-ID') }} tidak dapat kami setujui. 
-                                        <br><span class="font-semibold text-gray-800">Alasan Penolakan:</span> "{{ order.return_request.admin_notes }}"
+                                    <p v-if="activeReturnRequest.status === 'rejected'" class="text-gray-600 font-normal mb-2 text-xs">
+                                        Pengajuan retur Anda pada tanggal {{ new Date(activeReturnRequest.created_at).toLocaleDateString('id-ID') }} tidak dapat kami setujui. 
+                                        <br><span class="font-semibold text-gray-800">Alasan Penolakan:</span> "{{ activeReturnRequest.admin_notes }}"
                                     </p>
-                                    <Link :href="route('returns.show', order.return_request.return_number)"
-                                        :class="['inline-block mt-2 font-semibold underline', order.return_request.status === 'rejected' ? 'text-gray-800 hover:text-black' : 'text-orange-700 hover:text-orange-900']">
+                                    <Link :href="route('returns.show', activeReturnRequest.return_number)"
+                                        :class="['inline-block mt-2 font-semibold underline', activeReturnRequest.status === 'rejected' ? 'text-gray-800 hover:text-black' : 'text-orange-700 hover:text-orange-900']">
                                         Lihat Riwayat & Detail Retur
                                     </Link>
                                 </div>
@@ -431,13 +439,13 @@ const copyResi = async (resi) => {
                                                 Lihat Produk
                                             </Link>
 
-                                            <button v-if="order.status === 'completed' && !item.review && (!order.return_request || order.return_request.status === 'rejected' || !order.return_request.items?.some(ri => ri.order_item_id === item.id))"
+                                            <button v-if="order.status === 'completed' && !item.review && (!activeReturnRequest || activeReturnRequest.status === 'rejected' || !activeReturnRequest.items?.some(ri => ri.order_item_id === item.id))"
                                                 @click="openReviewModal(item)"
-                                                class="mt-2 inline-flex items-center justify-center px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-700 hover:bg-blue-100 hover:border-blue-300 transition-colors shadow-sm">
+                                                class="text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg border border-blue-200 transition-colors whitespace-nowrap">
                                                 Beri Ulasan
                                             </button>
-                                            <div v-else-if="order.status === 'completed' && !item.review && order.return_request && order.return_request.status !== 'rejected' && order.return_request.items?.some(ri => ri.order_item_id === item.id)"
-                                                class="mt-2 text-xs font-semibold text-red-600 bg-red-50 px-2 py-1.5 rounded-md border border-red-200 text-center">
+                                            <div v-else-if="order.status === 'completed' && !item.review && activeReturnRequest && activeReturnRequest.status !== 'rejected' && activeReturnRequest.items?.some(ri => ri.order_item_id === item.id)"
+                                                class="text-xs font-semibold text-orange-600 bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200 cursor-not-allowed whitespace-nowrap">
                                                 Tidak Dapat Diulas (Ada Retur)
                                             </div>
                                         </div>

@@ -105,7 +105,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('returns/{returnRequest}/approve', [\App\Http\Controllers\Admin\ReturnController::class, 'approve'])->name('returns.approve');
     Route::post('returns/{returnRequest}/reject', [\App\Http\Controllers\Admin\ReturnController::class, 'reject'])->name('returns.reject');
     Route::post('returns/{returnRequest}/receive', [\App\Http\Controllers\Admin\ReturnController::class, 'receive'])->name('returns.receive');
+    Route::post('returns/{returnRequest}/inspect', [\App\Http\Controllers\Admin\ReturnController::class, 'inspect'])->name('returns.inspect');
     Route::post('returns/{returnRequest}/refund', [\App\Http\Controllers\Admin\ReturnController::class, 'processRefund'])->name('returns.refund');
+    Route::post('returns/{returnRequest}/complete', [\App\Http\Controllers\Admin\ReturnController::class, 'complete'])->name('returns.complete');
 });
 
 // Payment API (public — no auth required)
