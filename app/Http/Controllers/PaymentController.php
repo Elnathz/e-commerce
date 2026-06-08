@@ -6,6 +6,8 @@ use App\Models\Order;
 use App\Models\Payment;
 use App\Models\ProductVariant;
 use App\Services\Payment\IPaymuService;
+use App\Traits\DispatchesAtomicNotification;
+use App\Notifications\OrderStatusNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +15,8 @@ use Illuminate\Support\Facades\Log;
 
 class PaymentController extends Controller
 {
+    use DispatchesAtomicNotification;
+
     /**
      * GET /api/payment-channels
      * Return list of available payment channels.
@@ -286,10 +290,24 @@ class PaymentController extends Controller
             }
         }
 
+        // Sprint 9: Confirm Promotion Usage (Phase 2A)
+        app(\App\Services\PromotionService::class)->confirm($order->id);
+
         Log::info('Payment successful: stock finalized', [
             'order_number' => $order->order_number,
             'items_count' => $orderItems->count(),
         ]);
+
+        // Sprint 9: Dispatch Notification atomically
+        $eventKey = "order_paid_notification_{$order->id}";
+        $this->dispatchAtomicNotification($eventKey, function () use ($order) {
+            $order->user->notify(new OrderStatusNotification(
+                $order,
+                'order_paid',
+                'Pembayaran Berhasil Diterima',
+                'Hore! Pembayaran untuk pesanan ' . $order->order_number . ' telah kami terima. Kami akan segera memproses pesanan Anda.'
+            ));
+        });
     }
 
     /**
@@ -334,10 +352,26 @@ class PaymentController extends Controller
                     : 'Pembayaran gagal',
             ]);
 
+            // Sprint 9: Release Promotion Usage (Phase 2B)
+            app(\App\Services\PromotionService::class)->release($order->id);
+
             Log::info('Payment failed/expired: stock released, order cancelled', [
                 'order_number' => $order->order_number,
                 'reason' => $status,
             ]);
+
+            // Sprint 9: Dispatch Notification atomically
+            $eventKey = "order_cancelled_notification_{$order->id}";
+            $this->dispatchAtomicNotification($eventKey, function () use ($order, $status) {
+                $order->user->notify(new OrderStatusNotification(
+                    $order,
+                    'order_cancelled',
+                    'Pesanan Dibatalkan',
+                    $status === 'expired'
+                        ? 'Pesanan ' . $order->order_number . ' telah dibatalkan secara otomatis karena melewati batas waktu pembayaran.'
+                        : 'Pesanan ' . $order->order_number . ' dibatalkan karena pembayaran gagal.'
+                ));
+            });
         }
     }
 }

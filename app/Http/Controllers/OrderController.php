@@ -65,15 +65,16 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', Auth::id())
             ->where('order_number', $order_number)
-            ->with(['items.productVariant.product', 'items.review.images', 'returnRequests.items', 'payments' => function($q) {
+            ->with(['items.productVariant.product', 'items.review.images', 'payments' => function($q) {
                 $q->latest();
             }])
             ->firstOrFail();
 
-        // We also append a custom attribute to pass to frontend
         $order->can_be_returned_flag = $order->canBeReturned();
-        $order->append('return_request');
-
+        if ($order->status === 'shipped' || $order->status === 'completed') {
+            $order->load('returnRequests.items.productVariant.product');
+        } 
+        
         return Inertia::render('Orders/Show', [
             'order' => $order
         ]);

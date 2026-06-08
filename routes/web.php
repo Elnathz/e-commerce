@@ -65,9 +65,12 @@ Route::middleware('auth')->group(function () {
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [\App\Http\Controllers\Admin\AnalyticsController::class, 'dashboard'])->name('dashboard');
+
+    // Analytics Exports
+    Route::get('/exports', [\App\Http\Controllers\Admin\AnalyticsController::class, 'exports'])->name('exports.index');
+    Route::post('/exports', [\App\Http\Controllers\Admin\AnalyticsController::class, 'startExport'])->name('exports.start');
+    Route::get('/exports/{job}/download', [\App\Http\Controllers\Admin\AnalyticsController::class, 'downloadExport'])->name('exports.download');
 
     Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class);
     Route::resource('products', \App\Http\Controllers\Admin\ProductController::class);
@@ -108,6 +111,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('returns/{returnRequest}/inspect', [\App\Http\Controllers\Admin\ReturnController::class, 'inspect'])->name('returns.inspect');
     Route::post('returns/{returnRequest}/refund', [\App\Http\Controllers\Admin\ReturnController::class, 'processRefund'])->name('returns.refund');
     Route::post('returns/{returnRequest}/complete', [\App\Http\Controllers\Admin\ReturnController::class, 'complete'])->name('returns.complete');
+
+    // Admin Promotions
+    Route::resource('promotions', \App\Http\Controllers\Admin\PromotionController::class);
+    Route::get('promotions/{promotion}/history', [\App\Http\Controllers\Admin\PromotionController::class, 'history'])->name('promotions.history');
 });
 
 // Payment API (public — no auth required)

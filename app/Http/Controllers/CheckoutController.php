@@ -10,10 +10,13 @@ use Illuminate\Support\Str;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductVariant;
+use App\Traits\DispatchesAtomicNotification;
+use App\Notifications\OrderStatusNotification;
 use Inertia\Inertia;
 
 class CheckoutController extends Controller
 {
+    use DispatchesAtomicNotification;
     /**
      * Render checkout page
      */
@@ -244,6 +247,17 @@ class CheckoutController extends Controller
                 }
 
                 return $order;
+            });
+
+            // Sprint 9: Dispatch Notification atomically (OrderCreated)
+            $eventKey = "order_created_notification_{$order->id}";
+            $this->dispatchAtomicNotification($eventKey, function () use ($order) {
+                $order->user->notify(new OrderStatusNotification(
+                    $order,
+                    'order_created',
+                    'Pesanan Baru Dibuat',
+                    'Terima kasih! Pesanan Anda dengan nomor ' . $order->order_number . ' telah berhasil dibuat. Silakan lakukan pembayaran sebelum batas waktu berakhir.'
+                ));
             });
 
             return redirect()
