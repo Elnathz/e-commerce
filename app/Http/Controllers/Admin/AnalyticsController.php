@@ -54,6 +54,24 @@ class AnalyticsController extends Controller
         ]);
     }
 
+    public function refresh(Request $request)
+    {
+        $user = Auth::user();
+        $rateLimitKey = 'refresh_dashboard_' . $user->id;
+
+        if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($rateLimitKey, 1)) {
+            $seconds = \Illuminate\Support\Facades\RateLimiter::availableIn($rateLimitKey);
+            return back()->with('error', "Terlalu sering. Harap tunggu {$seconds} detik.");
+        }
+
+        \Illuminate\Support\Facades\RateLimiter::hit($rateLimitKey, 30);
+
+        $period = $request->query('period', 'month');
+        $this->analyticsService->clearFinancialCache($period);
+
+        return back()->with('success', 'Data dashboard berhasil diperbarui.');
+    }
+
     public function getRevenueData(Request $request, \App\Services\Alerting\SystemAlertService $alertService)
     {
         $user = Auth::user();

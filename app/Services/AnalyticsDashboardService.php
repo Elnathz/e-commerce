@@ -32,6 +32,127 @@ class AnalyticsDashboardService
             'low_stock_count'     => $this->countLowStockProducts(),
             'awaiting_approval'   => ReturnRequest::where('status', 'submitted')->count(),
             'awaiting_inspection' => ReturnRequest::where('status', 'received')->count(),
+            'sla_breaches'        => $this->getSLABreaches(),
+            'financial_exposure'  => $this->getFinancialExposure(),
+            'pending_shipment'    => $this->getPendingShipmentStats(),
+            'priority_actions'    => $this->getPriorityActionsFeed(),
+        ];
+    }
+
+    /**
+     * Get Priority Actions Feed (Real-time task list)
+     */
+    public function getPriorityActionsFeed(): array
+    {
+        $feed = [];
+
+        // 1. Pesanan yang butuh diproses (Paling Lama)
+        $orders = Order::where('status', 'paid')
+            ->orderBy('paid_at', 'asc')
+            ->limit(5)
+            ->get();
+        
+        foreach ($orders as $order) {
+            $feed[] = [
+                'id' => $order->id,
+                'type' => 'order_paid',
+                'title' => 'Pesanan Baru: ' . $order->order_number,
+                'message' => 'Menunggu untuk diproses dan dikemas.',
+                'action_url' => route('admin.orders.show', $order->id),
+                'timestamp' => $order->paid_at,
+                'priority' => 'high'
+            ];
+        }
+
+        // 2. Retur yang butuh persetujuan
+        $returns = ReturnRequest::where('status', 'submitted')
+            ->orderBy('created_at', 'asc')
+            ->limit(5)
+            ->get();
+            
+        foreach ($returns as $ret) {
+            $feed[] = [
+                'id' => $ret->id,
+                'type' => 'return_submitted',
+                'title' => 'Pengajuan Retur: ' . $ret->return_number,
+                'message' => 'Menunggu persetujuan admin.',
+                'action_url' => route('admin.returns.show', $ret->id),
+                'timestamp' => $ret->created_at,
+                'priority' => 'critical'
+            ];
+        }
+
+        // 3. Retur yang butuh inspeksi
+        $returnsToInspect = ReturnRequest::where('status', 'received')
+            ->orderBy('return_received_at', 'asc')
+            ->limit(5)
+            ->get();
+            
+        foreach ($returnsToInspect as $ret) {
+            $feed[] = [
+                'id' => $ret->id,
+                'type' => 'return_received',
+                'title' => 'Inspeksi Retur: ' . $ret->return_number,
+                'message' => 'Barang retur sudah tiba di gudang dan butuh inspeksi.',
+                'action_url' => route('admin.returns.show', $ret->id),
+                'timestamp' => $ret->return_received_at,
+                'priority' => 'critical'
+            ];
+        }
+
+        // Urutkan berdasarkan waktu paling lama (paling mendesak)
+        usort($feed, function($a, $b) {
+            return $a['timestamp'] <=> $b['timestamp'];
+        });
+
+        // Ambil 10 teratas
+        return array_slice($feed, 0, 10);
+    }
+
+    /**
+     * Get SLA Breaches (Real-time)
+     */
+    public function getSLABreaches(): array
+    {
+        $uninspectedReturns = \App\Models\ReturnRequest::where('status', 'received')
+            ->where('return_received_at', '<', now()->subHours(24))
+            ->count();
+
+        $unrefundedReturns = \App\Models\ReturnRequest::where('status', 'inspected')
+            ->where('inspection_result', 'passed')
+            ->where('inspected_at', '<', now()->subHours(24))
+            ->count();
+
+        return [
+            'uninspected_returns' => $uninspectedReturns,
+            'unrefunded_returns' => $unrefundedReturns,
+            'total_breaches' => $uninspectedReturns + $unrefundedReturns,
+        ];
+    }
+
+    /**
+     * Get Financial Exposure (Revenue at risk)
+     */
+    public function getFinancialExposure(): float
+    {
+        return (float) DB::table('promotion_usages')
+            ->where('status', 'reserved')
+            ->sum('discount_applied');
+    }
+
+    /**
+     * Get Pending Shipment Stats
+     */
+    public function getPendingShipmentStats(): array
+    {
+        $stats = Order::where('status', 'processing')
+            ->selectRaw('COUNT(*) as total_orders, SUM(total_amount) as total_value, MIN(processing_at) as oldest_order_at')
+            ->first();
+
+        return [
+            'count' => $stats->total_orders ?? 0,
+            'value' => $stats->total_value ?? 0,
+            'oldest_at' => $stats->oldest_order_at,
         ];
     }
 
@@ -244,6 +365,16 @@ class AnalyticsDashboardService
             ->limit($limit)
             ->get()
             ->toArray();
+    }
+
+    /**
+     * Clear Financial Cache
+     */
+    public function clearFinancialCache(string $period = 'month'): void
+    {
+        [$startDate, $endDate] = $this->resolvePeriod($period);
+        $cacheKey = "dashboard_financial_metrics_{$period}_{$startDate}_{$endDate}";
+        Cache::forget($cacheKey);
     }
 
     /**

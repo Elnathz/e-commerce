@@ -52,6 +52,10 @@ watch(selectedPeriod, (value) => {
     });
 });
 
+const refreshDashboard = () => {
+    router.post(route('admin.dashboard.refresh'), { period: selectedPeriod.value }, { preserveScroll: true });
+};
+
 const isExportDialogOpen = ref(false);
 
 const formatRupiah = (value) => {
@@ -183,13 +187,16 @@ const paymentChartOptions = {
                         </div>
 
                         <!-- Period Pills -->
-                        <div class="inline-flex bg-gray-100 rounded-lg p-1 w-full lg:w-auto justify-between overflow-x-auto">
+                        <div class="inline-flex bg-gray-100 rounded-lg p-1 w-full lg:w-auto justify-between overflow-x-auto items-center">
                             <button @click="setPeriod('today')" :class="selectedPeriod === 'today' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Hari Ini</button>
                             <button @click="setPeriod('yesterday')" :class="selectedPeriod === 'yesterday' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Kemarin</button>
                             <button @click="setPeriod('7days')" :class="selectedPeriod === '7days' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">7 Hari</button>
                             <button @click="setPeriod('30days')" :class="selectedPeriod === '30days' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">30 Hari</button>
                             <button @click="setPeriod('month')" :class="selectedPeriod === 'month' ? 'bg-white shadow text-indigo-600 font-bold border border-indigo-100' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Bulan Ini</button>
                             <button @click="setPeriod('year')" :class="selectedPeriod === 'year' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Tahun Ini</button>
+                            <button @click="refreshDashboard" class="ml-2 text-indigo-600 font-bold px-3 py-1.5 hover:bg-indigo-50 rounded-md transition text-xs flex items-center gap-1">
+                                <span>↻</span> Segarkan
+                            </button>
                         </div>
 
                         <!-- Compare Dropdown -->
@@ -249,12 +256,33 @@ const paymentChartOptions = {
                                 </Link>
                             </div>
 
-                            <div class="mt-4 bg-yellow-50 rounded-lg p-3 flex justify-between items-center border border-yellow-100">
+                            <div v-if="metrics.sla_breaches?.total_breaches > 0" class="mt-4 bg-red-50 border-l-4 border-red-500 p-4 rounded-md">
+                                <div class="flex items-center">
+                                    <span class="text-red-500 text-xl mr-3">⚠️</span>
+                                    <div>
+                                        <h4 class="text-red-800 font-bold">Pelanggaran SLA Operasional!</h4>
+                                        <p class="text-red-700 text-sm">Terdapat {{ metrics.sla_breaches.uninspected_returns }} retur belum diinspeksi > 24 jam dan {{ metrics.sla_breaches.unrefunded_returns }} retur belum direfund > 24 jam.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 bg-yellow-50 rounded-lg p-3 flex flex-col md:flex-row md:justify-between md:items-center border border-yellow-100">
                                 <div class="flex items-center gap-3">
                                     <span class="text-xl">🚚</span>
-                                    <span class="text-sm font-bold text-yellow-800">{{ metrics.in_processing || 0 }} Order Sedang Diproses (In Processing)</span>
+                                    <div>
+                                        <div class="text-sm font-bold text-yellow-800">{{ metrics.pending_shipment?.count || 0 }} Order Sedang Diproses (Pending Shipment)</div>
+                                        <div class="text-xs text-yellow-700 mt-1">Total Nilai: {{ formatRupiah(metrics.pending_shipment?.value || 0) }} &bull; Order Paling Lama: {{ metrics.pending_shipment?.oldest_at ? new Date(metrics.pending_shipment.oldest_at).toLocaleString('id-ID') : '-' }}</div>
+                                    </div>
                                 </div>
-                                <Link :href="route('admin.orders.index', { status: 'processing' })" class="text-sm font-bold text-indigo-600 hover:text-indigo-800">Lihat Semua &rarr;</Link>
+                                <Link :href="route('admin.orders.index', { status: 'processing' })" class="text-sm font-bold text-indigo-600 hover:text-indigo-800 mt-2 md:mt-0">Lihat Semua &rarr;</Link>
+                            </div>
+
+                            <div v-if="metrics.financial_exposure > 0" class="mt-3 bg-orange-50 rounded-lg p-3 border border-orange-100 flex items-center gap-3">
+                                <span class="text-xl">💰</span>
+                                <div>
+                                    <div class="text-sm font-bold text-orange-800">Revenue at Risk (Exposure Promosi)</div>
+                                    <div class="text-xs text-orange-700 mt-1">Total Diskon Direservasi: {{ formatRupiah(metrics.financial_exposure) }} (Menunggu Pembayaran)</div>
+                                </div>
                             </div>
                         </section>
 
@@ -410,37 +438,36 @@ const paymentChartOptions = {
                             </div>
                         </section>
 
-                        <!-- Aktivitas Terbaru -->
+                        <!-- Priority Actions Feed -->
                         <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 flex-1">
-                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-l-4 border-purple-500 pl-2">Aktivitas Terbaru</h3>
-                            <div class="space-y-4">
-                                <div class="flex gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-sm flex-shrink-0">📦</div>
-                                    <div class="flex-1">
-                                        <p class="text-sm text-gray-800">Order <span class="font-bold text-indigo-600">#INV-250601-0012</span></p>
-                                        <p class="text-xs text-gray-500">Pembayaran berhasil</p>
-                                    </div>
-                                    <div class="text-xs text-gray-400 text-right whitespace-nowrap">Baru saja</div>
-                                </div>
-                                <div class="flex gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-green-100 flex items-center justify-center text-green-600 text-sm flex-shrink-0">🔄</div>
-                                    <div class="flex-1">
-                                        <p class="text-sm text-gray-800">Retur <span class="font-bold text-indigo-600">#RTR-250601-0008</span></p>
-                                        <p class="text-xs text-gray-500">Menunggu inspeksi</p>
-                                    </div>
-                                    <div class="text-xs text-gray-400 text-right whitespace-nowrap">5 menit lalu</div>
-                                </div>
-                                <div class="flex gap-3">
-                                    <div class="w-8 h-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-600 text-sm flex-shrink-0">⚠️</div>
-                                    <div class="flex-1">
-                                        <p class="text-sm text-gray-800">Stok Kritis: <span class="font-bold">Produk K - Variant Merah</span></p>
-                                        <p class="text-xs text-gray-500 text-red-600 font-medium">Sisa 5</p>
-                                    </div>
-                                    <div class="text-xs text-gray-400 text-right whitespace-nowrap">15 menit lalu</div>
-                                </div>
+                            <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-l-4 border-purple-500 pl-2">Task Priority Feed</h3>
+                            <div v-if="!metrics.priority_actions?.length" class="text-sm text-gray-500 text-center py-4">
+                                Tidak ada aksi prioritas saat ini.
                             </div>
-                            <div class="mt-6 text-center">
-                                <button class="text-sm text-indigo-600 font-bold hover:text-indigo-800">Lihat Semua Aktivitas &rarr;</button>
+                            <div v-else class="space-y-4">
+                                <div v-for="action in metrics.priority_actions" :key="action.type + action.id" class="flex gap-3 items-start border-b border-gray-50 pb-3 last:border-0 last:pb-0">
+                                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm flex-shrink-0"
+                                        :class="{
+                                            'bg-red-100 text-red-600': action.priority === 'critical',
+                                            'bg-orange-100 text-orange-600': action.priority === 'high',
+                                            'bg-blue-100 text-blue-600': action.priority === 'normal'
+                                        }">
+                                        {{ action.type.includes('return') ? '🔄' : '📦' }}
+                                    </div>
+                                    <div class="flex-1">
+                                        <p class="text-sm text-gray-800 font-bold">
+                                            <Link :href="action.action_url" class="hover:text-indigo-600">{{ action.title }}</Link>
+                                        </p>
+                                        <p class="text-xs text-gray-500 mt-1">{{ action.message }}</p>
+                                    </div>
+                                    <div class="text-xs font-medium text-right whitespace-nowrap"
+                                        :class="{
+                                            'text-red-500': action.priority === 'critical',
+                                            'text-gray-400': action.priority !== 'critical'
+                                        }">
+                                        {{ new Date(action.timestamp).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) }}
+                                    </div>
+                                </div>
                             </div>
                         </section>
 

@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', [\App\Http\Controllers\Admin\AnalyticsController::class, 'dashboard'])->name('dashboard');
+    Route::post('/dashboard/refresh', [\App\Http\Controllers\Admin\AnalyticsController::class, 'refresh'])->name('dashboard.refresh');
 
     // Analytics Exports
     Route::get('/exports', [\App\Http\Controllers\Admin\AnalyticsController::class, 'exports'])->name('exports.index');
