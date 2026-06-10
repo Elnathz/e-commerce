@@ -54,7 +54,8 @@ class OrderController extends Controller
         }
 
         $order->update([
-            'status' => 'processing'
+            'status' => 'processing',
+            'processing_at' => now(),
         ]);
 
         return back()->with('success', 'Pesanan sedang diproses dan dikemas.');

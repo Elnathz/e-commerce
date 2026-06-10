@@ -203,12 +203,18 @@ class ReturnController extends Controller
                 }
             }
 
-            $returnRequest->update([
+            $updateData = [
                 'status' => $newStatus,
                 'inspection_result' => $request->inspection_result,
                 'refund_amount' => $total_refund,
                 'admin_notes' => $request->admin_notes ?? $returnRequest->admin_notes,
-            ]);
+            ];
+
+            if ($newStatus === 'inspected') {
+                $updateData['inspected_at'] = now();
+            }
+
+            $returnRequest->update($updateData);
 
             $returnRequest->histories()->create([
                 'from_status' => $from_status,
