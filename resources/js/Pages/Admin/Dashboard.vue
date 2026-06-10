@@ -39,22 +39,69 @@ const props = defineProps({
 });
 
 const selectedPeriod = ref(props.metrics.period || 'month');
-const comparePeriod = ref('previous_period');
+const comparePeriod = ref(props.metrics.compare_period || 'previous_period');
 
 const setPeriod = (period) => {
     selectedPeriod.value = period;
 };
 
-watch(selectedPeriod, (value) => {
-    router.get(route('admin.dashboard'), { period: value }, {
+watch([selectedPeriod, comparePeriod], ([newPeriod, newCompare]) => {
+    router.get(route('admin.dashboard'), { period: newPeriod, compare_period: newCompare }, {
         preserveState: true,
         replace: true,
     });
 });
 
+const isRefreshing = ref(false);
+const showToast = ref(false);
+
 const refreshDashboard = () => {
-    router.post(route('admin.dashboard.refresh'), { period: selectedPeriod.value }, { preserveScroll: true });
+    if (isRefreshing.value) return;
+    
+    isRefreshing.value = true;
+    router.post(route('admin.dashboard.refresh'), { period: selectedPeriod.value, compare_period: comparePeriod.value }, { 
+        preserveScroll: true,
+        onSuccess: () => {
+            showToast.value = true;
+            setTimeout(() => {
+                showToast.value = false;
+            }, 3000);
+        },
+        onFinish: () => {
+            isRefreshing.value = false;
+        }
+    });
 };
+
+const showCustomDate = ref(false);
+const customStartDate = ref('');
+const customEndDate = ref('');
+
+const applyCustomDate = () => {
+    if (customStartDate.value && customEndDate.value) {
+        setPeriod(`${customStartDate.value}|${customEndDate.value}`);
+        showCustomDate.value = false;
+    }
+};
+
+const displayDateRange = computed(() => {
+    if (!props.metrics.period_start || !props.metrics.period_end) return 'Memilih tanggal...';
+    
+    const start = new Date(props.metrics.period_start);
+    const end = new Date(props.metrics.period_end);
+    
+    const options = { day: 'numeric', month: 'short', year: 'numeric' };
+    
+    if (props.metrics.period_start === props.metrics.period_end) {
+        return start.toLocaleDateString('id-ID', options);
+    }
+    
+    if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+        return `${start.getDate()} - ${end.getDate()} ${start.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })}`;
+    }
+    
+    return `${start.toLocaleDateString('id-ID', options)} - ${end.toLocaleDateString('id-ID', options)}`;
+});
 
 const isExportDialogOpen = ref(false);
 
@@ -86,28 +133,11 @@ const getTrendIcon = (trend) => {
     return '—';
 };
 
-// Mock data for Line Chart (Trend Penjualan)
-const chartData = computed(() => ({
-    labels: ['1 Mei', '6 Mei', '11 Mei', '16 Mei', '21 Mei', '26 Mei', '31 Mei'],
-    datasets: [
-        {
-            label: 'Gross Sales',
-            data: [10000000, 25000000, 18000000, 28000000, 15000000, 22000000, 19000000],
-            borderColor: '#4F46E5', // Indigo
-            backgroundColor: 'rgba(79, 70, 229, 0.1)',
-            tension: 0.4,
-            fill: true
-        },
-        {
-            label: 'Refund',
-            data: [1000000, 2000000, 1500000, 4000000, 1000000, 5000000, 2000000],
-            borderColor: '#10B981', // Emerald
-            backgroundColor: 'rgba(16, 185, 129, 0.1)',
-            tension: 0.4,
-            fill: true
-        }
-    ]
-}));
+// Data for Line Chart (Trend Penjualan)
+const chartData = computed(() => {
+    if (!props.metrics.sales_chart) return { labels: [], datasets: [] };
+    return props.metrics.sales_chart;
+});
 
 const chartOptions = {
     responsive: true,
@@ -130,17 +160,23 @@ const chartOptions = {
     }
 };
 
-// Mock data for Doughnut Chart (Ringkasan Pembayaran)
-const paymentChartData = computed(() => ({
-    labels: ['Transfer Bank', 'E-Wallet', 'Virtual Account', 'QRIS'],
-    datasets: [
-        {
-            data: [45.8, 32.1, 15.6, 7.9],
-            backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444'],
+// Data for Doughnut Chart (Ringkasan Pembayaran)
+const paymentChartData = computed(() => {
+    if (!props.metrics.payment_summary || props.metrics.payment_summary.length === 0) {
+        return {
+            labels: ['Tidak ada data'],
+            datasets: [{ data: [1], backgroundColor: ['#E5E7EB'], borderWidth: 0 }]
+        };
+    }
+    return {
+        labels: props.metrics.payment_summary.map(p => p.name),
+        datasets: [{
+            data: props.metrics.payment_summary.map(p => p.percentage),
+            backgroundColor: props.metrics.payment_summary.map(p => p.color),
             borderWidth: 0
-        }
-    ]
-}));
+        }]
+    };
+});
 
 const paymentChartOptions = {
     responsive: true,
@@ -148,8 +184,7 @@ const paymentChartOptions = {
     cutout: '70%',
     plugins: {
         legend: {
-            position: 'right',
-            labels: { usePointStyle: true, boxWidth: 8 }
+            display: false
         }
     }
 };
@@ -171,18 +206,42 @@ const paymentChartOptions = {
                         </h2>
                         <button 
                             @click="isExportDialogOpen = true"
-                            class="px-4 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium transition"
+                            class="p-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 hover:text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors shadow-sm border border-indigo-100"
+                            title="Export Data"
                         >
-                            Export Data ⌄
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                            </svg>
                         </button>
                     </div>
 
                     <div class="flex flex-col lg:flex-row items-center gap-4 text-sm w-full xl:w-auto">
-                        <!-- Date Picker Mock -->
-                        <div class="relative w-full lg:w-48">
-                            <input type="text" class="w-full pl-10 pr-4 py-2 border-gray-300 rounded-md shadow-sm text-sm" value="1 - 31 Mei 2025" readonly>
+                        <!-- Date Picker -->
+                        <div class="relative w-full lg:w-56 z-10">
+                            <button @click="showCustomDate = !showCustomDate" class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm text-left flex items-center justify-between hover:bg-gray-50 transition">
+                                <span>{{ displayDateRange }}</span>
+                                <span class="text-xs text-gray-400">▼</span>
+                            </button>
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 📅
+                            </div>
+                            
+                            <!-- Custom Date Dropdown -->
+                            <div v-if="showCustomDate" class="absolute top-full left-0 mt-2 w-72 bg-white border border-gray-200 shadow-xl rounded-lg p-4 z-50">
+                                <h4 class="text-sm font-bold text-gray-700 mb-3">Pilih Tanggal Kustom</h4>
+                                <div class="space-y-3">
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">Mulai</label>
+                                        <input type="date" v-model="customStartDate" class="w-full border-gray-300 rounded-md text-sm">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-500 mb-1">Sampai</label>
+                                        <input type="date" v-model="customEndDate" class="w-full border-gray-300 rounded-md text-sm">
+                                    </div>
+                                    <button type="button" @click.prevent="applyCustomDate" class="w-full bg-indigo-600 text-white rounded-md py-2 text-sm font-bold hover:bg-indigo-700 transition">
+                                        Terapkan
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -194,9 +253,20 @@ const paymentChartOptions = {
                             <button @click="setPeriod('30days')" :class="selectedPeriod === '30days' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">30 Hari</button>
                             <button @click="setPeriod('month')" :class="selectedPeriod === 'month' ? 'bg-white shadow text-indigo-600 font-bold border border-indigo-100' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Bulan Ini</button>
                             <button @click="setPeriod('year')" :class="selectedPeriod === 'year' ? 'bg-white shadow text-gray-900 font-medium' : 'text-gray-500 hover:text-gray-700'" class="px-3 py-1.5 text-xs rounded-md whitespace-nowrap">Tahun Ini</button>
-                            <button @click="refreshDashboard" class="ml-2 text-indigo-600 font-bold px-3 py-1.5 hover:bg-indigo-50 rounded-md transition text-xs flex items-center gap-1">
-                                <span>↻</span> Segarkan
+                            <button @click="refreshDashboard" :disabled="isRefreshing" class="ml-2 text-indigo-600 font-bold px-3 py-1.5 hover:bg-indigo-50 rounded-md transition text-xs flex items-center gap-1 disabled:opacity-50">
+                                <span :class="{'animate-spin': isRefreshing}">↻</span> 
+                                <span v-if="!isRefreshing">Segarkan</span>
+                                <span v-else>Menyegarkan...</span>
                             </button>
+                        </div>
+
+                        <!-- Toast Notification -->
+                        <div v-if="showToast" class="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-fade-in-down">
+                            <span class="text-xl">✅</span>
+                            <div>
+                                <h4 class="font-bold text-sm">Berhasil</h4>
+                                <p class="text-xs">Data dasbor telah diperbarui.</p>
+                            </div>
                         </div>
 
                         <!-- Compare Dropdown -->
@@ -225,34 +295,35 @@ const paymentChartOptions = {
                                     <span class="text-xs text-green-600 font-bold tracking-wider">LIVE</span>
                                 </div>
                             </div>
+                            <p class="text-xs text-gray-500 mb-4 border-l-2 border-gray-300 pl-2">Data operasional di bawah ini adalah kondisi riil saat ini (Real-time), mengabaikan filter tanggal di atas.</p>
                             
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <Link :href="route('admin.orders.index', { status: 'paid' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 hover:shadow-md transition relative group">
+                                <Link :href="route('admin.orders.index', { status: 'paid' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
                                     <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Need Fulfillment</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.need_fulfillment || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Order Paid menanti proses</div>
-                                    <div class="absolute bottom-4 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
+                                    <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
                                 
-                                <Link :href="route('admin.returns.index', { status: 'submitted' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 hover:shadow-md transition relative group">
+                                <Link :href="route('admin.returns.index', { status: 'submitted' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
                                     <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Antrean Retur Baru</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.awaiting_approval || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Menunggu approval Admin</div>
-                                    <div class="absolute bottom-4 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
+                                    <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
                                 
-                                <Link :href="route('admin.products.index', { filter: 'low_stock' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 hover:shadow-md transition relative group">
+                                <Link :href="route('admin.products.index', { filter: 'low_stock' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
                                     <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Stok Kritis</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.low_stock_count || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Varian produk batas bawah</div>
-                                    <div class="absolute bottom-4 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
+                                    <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
 
-                                <Link :href="route('admin.returns.index', { status: 'received' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 hover:shadow-md transition relative group">
+                                <Link :href="route('admin.returns.index', { status: 'received' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
                                     <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Inspeksi Retur</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.awaiting_inspection || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Barang tiba, perlu diperiksa</div>
-                                    <div class="absolute bottom-4 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
+                                    <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
                             </div>
 
@@ -287,16 +358,13 @@ const paymentChartOptions = {
                         </section>
 
                         <!-- TINJAUAN FINANSIAL (KPIs) -->
-                        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                        <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-100 mb-6">
                             <div class="flex items-center justify-between mb-4">
-                                <h3 class="text-md font-bold text-gray-800 border-l-4 border-indigo-500 pl-3">Tinjauan Finansial & Performa</h3>
-                                <div class="inline-flex bg-gray-100 rounded-lg p-1">
-                                    <button class="px-3 py-1 text-xs text-gray-500 hover:text-gray-900">Hari</button>
-                                    <button class="px-3 py-1 text-xs text-gray-500 hover:text-gray-900">Minggu</button>
-                                    <button class="px-3 py-1 text-xs bg-white shadow text-gray-900 font-bold rounded">Bulan</button>
-                                    <button class="px-3 py-1 text-xs text-gray-500 hover:text-gray-900">Tahun</button>
+                                <div>
+                                    <h3 class="text-md font-bold text-gray-800 border-l-4 border-indigo-500 pl-3">Tinjauan Finansial & Performa</h3>
+                                    <p class="text-xs text-gray-500 mt-1 ml-4 border-l-2 border-gray-300 pl-2">Data di bawah ini dihitung berdasarkan filter rentang waktu: <strong>{{ displayDateRange }}</strong></p>
                                 </div>
-                            </div>
+                            </div>  
 
                             <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                 <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition">
@@ -305,7 +373,7 @@ const paymentChartOptions = {
                                         <div class="text-2xl font-black text-gray-900">{{ formatRupiah(metrics.gross_sales || 0) }}</div>
                                         <div class="text-xs font-bold" :class="getTrendColor(metrics.gross_sales_trend || 0)">{{ getTrendIcon(metrics.gross_sales_trend || 0) }} {{ Math.abs(metrics.gross_sales_trend || 0) }}%</div>
                                     </div>
-                                    <div class="text-xs text-gray-400 mt-2">vs Apr 2025<br>Total pembayaran berhasil</div>
+                                    <div class="text-xs text-gray-400 mt-2">vs Periode Sebelumnya<br>Total pembayaran berhasil</div>
                                 </div>
 
                                 <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition">
@@ -314,7 +382,7 @@ const paymentChartOptions = {
                                         <div class="text-2xl font-black text-gray-900">{{ metrics.total_orders || 0 }}</div>
                                         <div class="text-xs font-bold" :class="getTrendColor(metrics.total_orders_trend || 0)">{{ getTrendIcon(metrics.total_orders_trend || 0) }} {{ Math.abs(metrics.total_orders_trend || 0) }}%</div>
                                     </div>
-                                    <div class="text-xs text-gray-400 mt-2">vs Apr 2025<br>Total volume penjualan (kecuali pending)</div>
+                                    <div class="text-xs text-gray-400 mt-2">vs Periode Sebelumnya<br>Total volume penjualan (kecuali pending)</div>
                                 </div>
 
                                 <div class="border border-gray-100 rounded-xl p-5 hover:shadow-md transition">
@@ -323,7 +391,7 @@ const paymentChartOptions = {
                                         <div class="text-2xl font-black text-gray-900">{{ formatRupiah(metrics.total_refund || 0) }}</div>
                                         <div class="text-xs font-bold" :class="getTrendColor(-(metrics.total_refund_trend || 0))">{{ getTrendIcon(metrics.total_refund_trend || 0) }} {{ Math.abs(metrics.total_refund_trend || 0) }}%</div>
                                     </div>
-                                    <div class="text-xs text-gray-400 mt-2">vs Apr 2025<br>Total uang kembali ke customer</div>
+                                    <div class="text-xs text-gray-400 mt-2">vs Periode Sebelumnya<br>Total uang kembali ke customer</div>
                                 </div>
                             </div>
 
@@ -332,21 +400,21 @@ const paymentChartOptions = {
                                     <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Checkout Attempts</div>
                                     <div class="flex items-center gap-2">
                                         <div class="text-xl font-black text-gray-900">{{ metrics.checkout_created || 0 }}</div>
-                                        <span class="text-xs text-green-600 font-bold">▲ 8.4%</span>
+                                        <span class="text-xs font-bold" :class="getTrendColor(metrics.checkout_created_trend || 0)">{{ getTrendIcon(metrics.checkout_created_trend || 0) }} {{ Math.abs(metrics.checkout_created_trend || 0) }}%</span>
                                     </div>
                                 </div>
                                 <div class="border border-gray-100 rounded-xl p-4 flex justify-between items-center bg-gray-50/50">
                                     <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Checkout-to-Paid</div>
                                     <div class="flex items-center gap-2">
                                         <div class="text-xl font-black text-gray-900">{{ metrics.checkout_to_paid_rate || 0 }}%</div>
-                                        <span class="text-xs text-green-600 font-bold">▲ 3.1%</span>
+                                        <span class="text-xs font-bold" :class="getTrendColor(metrics.checkout_to_paid_rate_trend || 0)">{{ getTrendIcon(metrics.checkout_to_paid_rate_trend || 0) }} {{ Math.abs(metrics.checkout_to_paid_rate_trend || 0) }}%</span>
                                     </div>
                                 </div>
                                 <div class="border border-gray-100 rounded-xl p-4 flex justify-between items-center bg-gray-50/50">
                                     <div class="text-xs font-bold text-gray-500 uppercase tracking-wider">Order Return Rate</div>
                                     <div class="flex items-center gap-2">
                                         <div class="text-xl font-black text-gray-900">{{ metrics.order_return_rate || 0 }}%</div>
-                                        <span class="text-xs text-red-600 font-bold">▲ 0.8%</span>
+                                        <span class="text-xs font-bold" :class="getTrendColor(-(metrics.order_return_rate_trend || 0))">{{ getTrendIcon(metrics.order_return_rate_trend || 0) }} {{ Math.abs(metrics.order_return_rate_trend || 0) }}%</span>
                                     </div>
                                 </div>
                             </div>
@@ -402,10 +470,14 @@ const paymentChartOptions = {
                                     <Doughnut :data="paymentChartData" :options="paymentChartOptions" />
                                 </div>
                                 <div class="w-1/2 pl-4 text-xs space-y-2">
-                                    <div class="flex justify-between"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-blue-500"></span> Transfer Bank</span> <b>45.8%</b></div>
-                                    <div class="flex justify-between"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-green-500"></span> E-Wallet</span> <b>32.1%</b></div>
-                                    <div class="flex justify-between"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-yellow-500"></span> Virtual Account</span> <b>15.6%</b></div>
-                                    <div class="flex justify-between"><span class="flex items-center gap-1"><span class="w-2 h-2 rounded-full bg-red-500"></span> QRIS</span> <b>7.9%</b></div>
+                                    <div v-for="payment in metrics.payment_summary" :key="payment.name" class="flex justify-between items-center text-sm border-b border-gray-50 pb-2">
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-2.5 h-2.5 rounded-full" :style="{ backgroundColor: payment.color }"></span>
+                                            <span class="text-gray-600">{{ payment.name }}</span>
+                                        </div>
+                                        <span class="font-bold text-gray-800">{{ payment.percentage }}%</span>
+                                    </div>
+                                    <div v-if="!metrics.payment_summary || metrics.payment_summary.length === 0" class="text-sm text-gray-400 text-center py-4">Belum ada data pembayaran</div>
                                 </div>
                             </div>
                         </section>
@@ -414,25 +486,22 @@ const paymentChartOptions = {
                         <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                             <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider mb-4 border-l-4 border-green-500 pl-2">Performa Logistik</h3>
                             <div class="space-y-4 text-sm">
-                                <div class="flex justify-between items-center border-b border-gray-50 pb-2">
-                                    <span class="text-gray-600">Rata-rata Ongkir</span>
+                                <div class="flex justify-between items-center py-3 border-b border-gray-100">
+                                    <span class="text-gray-600 text-sm">Rata-rata Ongkir</span>
                                     <div class="flex items-center gap-2">
-                                        <span class="font-bold text-gray-900">Rp 24.500</span>
-                                        <span class="text-xs text-green-600 font-bold">▲ 6.2%</span>
+                                        <span class="font-bold text-gray-900">{{ formatRupiah(metrics.logistics_performance?.avg_shipping_cost || 0) }}</span>
                                     </div>
                                 </div>
-                                <div class="flex justify-between items-center border-b border-gray-50 pb-2">
-                                    <span class="text-gray-600">Rata-rata Lama Pengiriman</span>
+                                <div class="flex justify-between items-center py-3 border-b border-gray-100">
+                                    <span class="text-gray-600 text-sm">Rata-rata Lama Pengiriman</span>
                                     <div class="flex items-center gap-2">
-                                        <span class="font-bold text-gray-900">2.8 hari</span>
-                                        <span class="text-xs text-green-600 font-bold">▼ 0.3 hari</span>
+                                        <span class="font-bold text-gray-900">{{ metrics.logistics_performance?.avg_delivery_days || 0 }} hari</span>
                                     </div>
                                 </div>
-                                <div class="flex justify-between items-center">
-                                    <span class="text-gray-600">Order Tepat Waktu</span>
+                                <div class="flex justify-between items-center py-3">
+                                    <span class="text-gray-600 text-sm">Order Tepat Waktu</span>
                                     <div class="flex items-center gap-2">
-                                        <span class="font-bold text-gray-900">92.1%</span>
-                                        <span class="text-xs text-green-600 font-bold">▲ 4.6%</span>
+                                        <span class="font-bold text-gray-900">{{ metrics.logistics_performance?.on_time_rate || 0 }}%</span>
                                     </div>
                                 </div>
                             </div>

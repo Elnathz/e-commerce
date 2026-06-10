@@ -20,27 +20,40 @@ class AnalyticsController extends Controller
     public function dashboard(Request $request, \App\Services\Alerting\SystemAlertService $alertService)
     {
         $period = $request->query('period', 'month');
+        $comparePeriod = $request->query('compare_period', 'previous_period');
         $user = Auth::user();
         
         $metrics = [];
-        // Asumsi: jika role tidak ada/kosong, kita anggap sebagai admin biasa/gudang. 
-        // Jika owner/superadmin, dia punya role tertentu. Karena di tabel users ada kolom `role`, kita akan periksa:
-        $isOwner = in_array($user->role, ['owner', 'superadmin']);
+        // Karena di database role hanya 'admin' dan 'customer', kita anggap 'admin' memiliki akses penuh (sebagai owner/pengelola utama).
+        $isOwner = in_array($user->role, ['owner', 'superadmin', 'admin']);
 
         // Jika Operational Dashboard
-        $metrics['operational'] = $this->analyticsService->getOperationalMetrics();
+        $operational = $this->analyticsService->getOperationalMetrics();
         $lowStockProducts = $this->analyticsService->getLowStockProducts(10);
+
+        [$periodStart, $periodEnd] = $this->analyticsService->resolvePeriod($period);
 
         if ($isOwner) {
             // Hanya owner yang boleh menarik data finansial (simulasi pemisahan service)
-            $metrics['financial'] = $this->analyticsService->getFinancialMetrics($period);
+            $financial = $this->analyticsService->getFinancialMetrics($period, $comparePeriod);
         } else {
-            $metrics['financial'] = [
+            $financial = [
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
                 'gross_sales' => 0,
+                'gross_sales_trend' => 0,
                 'total_refund' => 0,
+                'total_refund_trend' => 0,
                 'checkout_to_paid_rate' => 0,
-                'return_rate' => 0,
+                'checkout_to_paid_rate_trend' => 0,
+                'order_return_rate' => 0,
+                'order_return_rate_trend' => 0,
                 'repeat_customer_rate' => 0,
+
+                // Non-financial metrics that should still be visible
+                'payment_summary' => $this->analyticsService->getPaymentSummary($periodStart, $periodEnd),
+                'logistics_performance' => $this->analyticsService->getLogisticsPerformance($periodStart, $periodEnd),
+                'sales_chart' => $this->analyticsService->getSalesChartData($periodStart, $periodEnd, $period),
             ];
             
             // Catat jika bukan owner tapi mencoba mengakses API endpoint spesifik revenue (jika dibuat)
@@ -48,7 +61,10 @@ class AnalyticsController extends Controller
         }
 
         return Inertia::render('Admin/Dashboard', [
-            'metrics' => $metrics,
+            'metrics' => array_merge($operational, $financial, [
+                'period' => $period,
+                'compare_period' => $comparePeriod,
+            ]),
             'lowStockProducts' => $lowStockProducts,
             'isOwner' => $isOwner,
         ]);
@@ -66,8 +82,9 @@ class AnalyticsController extends Controller
 
         \Illuminate\Support\Facades\RateLimiter::hit($rateLimitKey, 30);
 
-        $period = $request->query('period', 'month');
-        $this->analyticsService->clearFinancialCache($period);
+        $period = $request->input('period', 'month');
+        $comparePeriod = $request->input('compare_period', 'previous_period');
+        $this->analyticsService->clearFinancialCache($period, $comparePeriod);
 
         return back()->with('success', 'Data dashboard berhasil diperbarui.');
     }

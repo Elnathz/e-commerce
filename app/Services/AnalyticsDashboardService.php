@@ -146,7 +146,7 @@ class AnalyticsDashboardService
     public function getPendingShipmentStats(): array
     {
         $stats = Order::where('status', 'processing')
-            ->selectRaw('COUNT(*) as total_orders, SUM(total_amount) as total_value, MIN(processing_at) as oldest_order_at')
+            ->selectRaw('COUNT(*) as total_orders, SUM(total_amount) as total_value, MIN(COALESCE(paid_at, created_at)) as oldest_order_at')
             ->first();
 
         return [
@@ -159,14 +159,14 @@ class AnalyticsDashboardService
     /**
      * Get Financial Metrics (Cached)
      */
-    public function getFinancialMetrics(string $period = 'today'): array
+    public function getFinancialMetrics(string $period = 'today', string $comparePeriod = 'previous_period'): array
     {
         [$startDate, $endDate] = $this->resolvePeriod($period);
-        [$prevStartDate, $prevEndDate] = $this->resolvePreviousPeriod($period);
+        [$prevStartDate, $prevEndDate] = $this->resolvePreviousPeriod($period, $comparePeriod);
 
-        $cacheKey = "dashboard_financial_metrics_{$period}_{$startDate}_{$endDate}";
+        $cacheKey = "dashboard_financial_metrics_{$period}_{$comparePeriod}_{$startDate}_{$endDate}";
 
-        return Cache::remember($cacheKey, 300, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate) {
+        return Cache::remember($cacheKey, 60 * 60, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate, $period) {
             $currentGross = $this->calculateGrossSales($startDate, $endDate);
             $prevGross = $this->calculateGrossSales($prevStartDate, $prevEndDate);
             
@@ -176,28 +176,225 @@ class AnalyticsDashboardService
             $currentOrders = $this->countPaidOrders($startDate, $endDate);
             $prevOrders = $this->countPaidOrders($prevStartDate, $prevEndDate);
             
-            $checkoutCreated = $this->countCheckoutCreated($startDate, $endDate);
-            $paidOrders      = $currentOrders;
+            $currentCheckoutCreated = $this->countCheckoutCreated($startDate, $endDate);
+            $prevCheckoutCreated = $this->countCheckoutCreated($prevStartDate, $prevEndDate);
+
+            $currentPaidOrders      = $currentOrders;
+            $prevPaidOrders         = $prevOrders;
 
             // Note: Metric ini cocok untuk trend/funnel conversion,
             // BUKAN financial KPI presisi (Checkout 31 Jan bisa dibayar 1 Feb).
-            $checkoutToPaidRate = $checkoutCreated > 0 ? round(($paidOrders / $checkoutCreated) * 100, 1) : 0;
+            $currentCheckoutToPaidRate = $currentCheckoutCreated > 0 ? round(($currentPaidOrders / $currentCheckoutCreated) * 100, 1) : 0;
+            $prevCheckoutToPaidRate = $prevCheckoutCreated > 0 ? round(($prevPaidOrders / $prevCheckoutCreated) * 100, 1) : 0;
+
+            $currentOrderReturnRate = $this->calculateOrderReturnRate($startDate, $endDate);
+            $prevOrderReturnRate = $this->calculateOrderReturnRate($prevStartDate, $prevEndDate);
 
             return [
+                'period_start'     => $startDate,
+                'period_end'       => $endDate,
                 'gross_sales'      => $currentGross,
                 'gross_sales_trend'=> $this->calculateTrend($currentGross, $prevGross),
                 'total_refund'     => $currentRefund,
                 'total_refund_trend'=> $this->calculateTrend($currentRefund, $prevRefund),
                 'total_orders'     => $currentOrders,
                 'total_orders_trend'=> $this->calculateTrend($currentOrders, $prevOrders),
-                'checkout_created' => $checkoutCreated,
-                'paid_orders'      => $paidOrders,
-                'checkout_to_paid_rate' => $checkoutToPaidRate,
+                
+                'checkout_created' => $currentCheckoutCreated,
+                'checkout_created_trend' => $this->calculateTrend($currentCheckoutCreated, $prevCheckoutCreated),
+                
+                'paid_orders'      => $currentPaidOrders,
+                
+                'checkout_to_paid_rate' => $currentCheckoutToPaidRate,
+                'checkout_to_paid_rate_trend' => $this->calculateTrend($currentCheckoutToPaidRate, $prevCheckoutToPaidRate),
+                
                 'top_products'     => $this->getTopProducts($startDate, $endDate, 3), // Only top 3 for visual
-                'order_return_rate'=> $this->calculateOrderReturnRate($startDate, $endDate),
+                
+                'order_return_rate'=> $currentOrderReturnRate,
+                'order_return_rate_trend' => $this->calculateTrend($currentOrderReturnRate, $prevOrderReturnRate),
+                
                 'repeat_customer_rate' => $this->calculateRepeatCustomerRate(),
+
+                'payment_summary'  => $this->getPaymentSummary($startDate, $endDate),
+                'logistics_performance' => $this->getLogisticsPerformance($startDate, $endDate),
+                'sales_chart'      => $this->getSalesChartData($startDate, $endDate, $period),
             ];
         });
+    }
+
+    /**
+     * Get Payment Summary
+     */
+    public function getPaymentSummary(string $startDate, string $endDate): array
+    {
+        $methods = Order::whereIn('status', ['completed', 'refunded', 'processing', 'shipped', 'paid'])
+            ->whereDate('paid_at', '>=', $startDate)
+            ->whereDate('paid_at', '<=', $endDate)
+            ->select('payment_method', DB::raw('COUNT(*) as count'))
+            ->groupBy('payment_method')
+            ->get();
+
+        $total = $methods->sum('count');
+        
+        if ($total == 0) {
+            return [];
+        }
+
+        $summary = [];
+        $colors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
+        $i = 0;
+
+        foreach ($methods as $method) {
+            $name = strtoupper(str_replace('_', ' ', $method->payment_method ?? 'Unknown'));
+            $percentage = round(($method->count / $total) * 100, 1);
+            
+            $summary[] = [
+                'name' => $name,
+                'percentage' => $percentage,
+                'color' => $colors[$i % count($colors)],
+            ];
+            $i++;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Get Logistics Performance
+     */
+    public function getLogisticsPerformance(string $startDate, string $endDate): array
+    {
+        $shippedOrders = Order::whereNotNull('shipped_at')
+            ->whereNotNull('delivered_at')
+            ->whereDate('created_at', '>=', $startDate)
+            ->whereDate('created_at', '<=', $endDate)
+            ->select('shipping_cost', 'shipped_at', 'delivered_at')
+            ->get();
+
+        $totalOrders = $shippedOrders->count();
+        $totalShippingCost = $shippedOrders->sum('shipping_cost');
+        
+        $avgDeliveryDays = 0;
+        $onTimeCount = 0;
+
+        foreach ($shippedOrders as $order) {
+            $days = $order->shipped_at->diffInDays($order->delivered_at);
+            $avgDeliveryDays += $days;
+            // Anggap SLA tepat waktu adalah <= 3 hari
+            if ($days <= 3) {
+                $onTimeCount++;
+            }
+        }
+
+        $avgDeliveryDays = $totalOrders > 0 ? round($avgDeliveryDays / $totalOrders, 1) : 0;
+        $avgShippingCost = $totalOrders > 0 ? round($totalShippingCost / $totalOrders, 0) : 0;
+        $onTimeRate = $totalOrders > 0 ? round(($onTimeCount / $totalOrders) * 100, 1) : 0;
+
+        // Simplified previous period for trend
+        [$prevStart, $prevEnd] = $this->resolvePreviousPeriod('month');
+        // Pseudo logic for trend, using basic 0 for now since this is getting complex
+        // Ideally we'd fetch previous data too. We'll return 0 trend for now or just the value.
+
+        return [
+            'avg_shipping_cost' => $avgShippingCost,
+            'avg_shipping_cost_trend' => 0,
+            'avg_delivery_days' => $avgDeliveryDays,
+            'avg_delivery_days_trend' => 0,
+            'on_time_rate' => $onTimeRate,
+            'on_time_rate_trend' => 0,
+        ];
+    }
+
+    /**
+     * Get Sales Chart Data
+     */
+    public function getSalesChartData(string $startDate, string $endDate, string $period): array
+    {
+        $diffDays = \Carbon\Carbon::parse($startDate)->diffInDays(\Carbon\Carbon::parse($endDate));
+        $groupBy = $diffDays > 31 ? 'month' : 'day';
+
+        $orders = Order::whereIn('status', ['completed', 'refunded'])
+            ->whereDate('paid_at', '>=', $startDate)
+            ->whereDate('paid_at', '<=', $endDate);
+
+        if ($groupBy === 'month') {
+            $orders = $orders->selectRaw('DATE_FORMAT(paid_at, "%Y-%m") as date, SUM(total_amount) as gross_sales')
+                             ->groupBy('date')
+                             ->orderBy('date')
+                             ->get();
+        } else {
+            $orders = $orders->selectRaw('DATE(paid_at) as date, SUM(total_amount) as gross_sales')
+                             ->groupBy('date')
+                             ->orderBy('date')
+                             ->get();
+        }
+
+        $refunds = DB::table('return_requests as rr')
+            ->join('return_request_items as rri', 'rri.return_request_id', '=', 'rr.id')
+            ->whereIn('rr.status', ['refund_processed', 'completed'])
+            ->whereDate('rr.refund_processed_at', '>=', $startDate)
+            ->whereDate('rr.refund_processed_at', '<=', $endDate);
+
+        if ($groupBy === 'month') {
+            $refunds = $refunds->selectRaw('DATE_FORMAT(rr.refund_processed_at, "%Y-%m") as date, SUM(rri.refund_amount) as total_refund')
+                               ->groupBy('date')
+                               ->orderBy('date')
+                               ->get();
+        } else {
+            $refunds = $refunds->selectRaw('DATE(rr.refund_processed_at) as date, SUM(rri.refund_amount) as total_refund')
+                               ->groupBy('date')
+                               ->orderBy('date')
+                               ->get();
+        }
+
+        $labels = [];
+        $grossData = [];
+        $refundData = [];
+
+        // Build complete date range
+        $current = \Carbon\Carbon::parse($startDate);
+        $end = \Carbon\Carbon::parse($endDate);
+
+        while ($current <= $end) {
+            $key = $groupBy === 'month' ? $current->format('Y-m') : $current->format('Y-m-d');
+            $label = $groupBy === 'month' ? $current->translatedFormat('M Y') : $current->translatedFormat('j M');
+            
+            if (!in_array($label, $labels)) {
+                $labels[] = $label;
+                $gross = $orders->firstWhere('date', $key)->gross_sales ?? 0;
+                $refund = $refunds->firstWhere('date', $key)->total_refund ?? 0;
+                $grossData[] = (float) $gross;
+                $refundData[] = (float) $refund;
+            }
+
+            if ($groupBy === 'month') {
+                $current->addMonth();
+            } else {
+                $current->addDay();
+            }
+        }
+
+        return [
+            'labels' => $labels,
+            'datasets' => [
+                [
+                    'label' => 'Gross Sales',
+                    'data' => $grossData,
+                    'borderColor' => '#4F46E5',
+                    'backgroundColor' => 'rgba(79, 70, 229, 0.1)',
+                    'tension' => 0.4,
+                    'fill' => true
+                ],
+                [
+                    'label' => 'Refund',
+                    'data' => $refundData,
+                    'borderColor' => '#10B981',
+                    'backgroundColor' => 'rgba(16, 185, 129, 0.1)',
+                    'tension' => 0.4,
+                    'fill' => true
+                ]
+            ]
+        ];
     }
 
     /**
@@ -370,38 +567,68 @@ class AnalyticsDashboardService
     /**
      * Clear Financial Cache
      */
-    public function clearFinancialCache(string $period = 'month'): void
+    public function clearFinancialCache(string $period = 'month', string $comparePeriod = 'previous_period'): void
     {
         [$startDate, $endDate] = $this->resolvePeriod($period);
-        $cacheKey = "dashboard_financial_metrics_{$period}_{$startDate}_{$endDate}";
+        $cacheKey = "dashboard_financial_metrics_{$period}_{$comparePeriod}_{$startDate}_{$endDate}";
         Cache::forget($cacheKey);
     }
 
     /**
      * Resolve period string to [startDate, endDate]
      */
-    protected function resolvePeriod(string $period): array
+    public function resolvePeriod(string $period): array
     {
+        if (str_contains($period, '|')) {
+            $parts = explode('|', $period);
+            return [$parts[0], $parts[1] ?? $parts[0]];
+        }
+
         return match ($period) {
-            'today'  => [now()->toDateString(), now()->toDateString()],
-            'week'   => [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()],
-            'month'  => [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()],
-            'year'   => [now()->startOfYear()->toDateString(), now()->endOfYear()->toDateString()],
-            default  => [now()->toDateString(), now()->toDateString()],
+            'today'     => [now()->toDateString(), now()->toDateString()],
+            'yesterday' => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
+            '7days'     => [now()->subDays(6)->toDateString(), now()->toDateString()],
+            '30days'    => [now()->subDays(29)->toDateString(), now()->toDateString()],
+            'week'      => [now()->startOfWeek()->toDateString(), now()->endOfWeek()->toDateString()],
+            'month'     => [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()],
+            'year'      => [now()->startOfYear()->toDateString(), now()->endOfYear()->toDateString()],
+            default     => [now()->startOfMonth()->toDateString(), now()->endOfMonth()->toDateString()],
         };
     }
 
     /**
      * Resolve previous period string to [prevStartDate, prevEndDate] for trend calculation
      */
-    protected function resolvePreviousPeriod(string $period): array
+    public function resolvePreviousPeriod(string $period, string $comparePeriod = 'previous_period'): array
     {
+        if ($comparePeriod === 'previous_year') {
+            [$start, $end] = $this->resolvePeriod($period);
+            return [
+                \Carbon\Carbon::parse($start)->subYear()->toDateString(),
+                \Carbon\Carbon::parse($end)->subYear()->toDateString(),
+            ];
+        }
+
+        if (str_contains($period, '|')) {
+            $parts = explode('|', $period);
+            $start = \Carbon\Carbon::parse($parts[0]);
+            $end = \Carbon\Carbon::parse($parts[1] ?? $parts[0]);
+            $diffDays = $start->diffInDays($end) + 1;
+            return [
+                $start->copy()->subDays($diffDays)->toDateString(),
+                $end->copy()->subDays($diffDays)->toDateString(),
+            ];
+        }
+
         return match ($period) {
-            'today'  => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
-            'week'   => [now()->subWeek()->startOfWeek()->toDateString(), now()->subWeek()->endOfWeek()->toDateString()],
-            'month'  => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
-            'year'   => [now()->subYear()->startOfYear()->toDateString(), now()->subYear()->endOfYear()->toDateString()],
-            default  => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
+            'today'     => [now()->subDay()->toDateString(), now()->subDay()->toDateString()],
+            'yesterday' => [now()->subDays(2)->toDateString(), now()->subDays(2)->toDateString()],
+            '7days'     => [now()->subDays(13)->toDateString(), now()->subDays(7)->toDateString()],
+            '30days'    => [now()->subDays(59)->toDateString(), now()->subDays(30)->toDateString()],
+            'week'      => [now()->subWeek()->startOfWeek()->toDateString(), now()->subWeek()->endOfWeek()->toDateString()],
+            'month'     => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
+            'year'      => [now()->subYear()->startOfYear()->toDateString(), now()->subYear()->endOfYear()->toDateString()],
+            default     => [now()->subMonth()->startOfMonth()->toDateString(), now()->subMonth()->endOfMonth()->toDateString()],
         };
     }
 

@@ -18,6 +18,7 @@ class ProductController extends Controller
         $products = Product::select('products.*')
             ->leftJoin('categories', 'products.category_id', '=', 'categories.id')
             ->with(['category', 'images'])
+            ->withSum('variants', 'stock')
             ->orderBy('categories.name', 'asc')
             ->orderBy('products.created_at', 'desc')
             ->paginate(20);

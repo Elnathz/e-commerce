@@ -98,6 +98,18 @@ const groupedProducts = computed(() => {
                                                             {{ product.is_active ? 'Aktif' : 'Nonaktif' }}
                                                         </span>
                                                     </span>
+                                                    <span class="block mt-2 flex items-center">
+                                                        <span class="mr-2">Sisa Stok:</span>
+                                                        <span v-if="product.variants_sum_stock > 5" class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-200">
+                                                            {{ product.variants_sum_stock }} Item
+                                                        </span>
+                                                        <span v-else-if="product.variants_sum_stock > 0" class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-red-50 text-red-600 border border-red-200 animate-pulse">
+                                                            Kritis: {{ product.variants_sum_stock }}
+                                                        </span>
+                                                        <span v-else class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-100 text-slate-500 border border-slate-200">
+                                                            Habis
+                                                        </span>
+                                                    </span>
                                                 </p>
                                             </div>
                                         </div>

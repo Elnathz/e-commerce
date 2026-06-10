@@ -233,6 +233,10 @@ class CheckoutController extends Controller
                         'weight_gram' => $variant->weight_gram ?? $product->weight_gram,
                         'subtotal' => $variant->price * $item->quantity,
                     ]);
+                    
+                    // Decrement stock
+                    $variant->decrement('stock', $item->quantity);
+
                     $cartItemIdsToDelete[] = $item->id;
                 }
 

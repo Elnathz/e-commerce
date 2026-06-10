@@ -72,6 +72,11 @@ class CancelExpiredOrders extends Command
                         'cancelled_at' => now(),
                         'cancelled_reason' => 'Batas waktu pembayaran habis (otomatis)',
                     ]);
+
+                    // Release stock
+                    foreach ($order->items as $item) {
+                        $item->variant->increment('stock', $item->quantity);
+                    }
                 });
 
                 $cancelledCount++;

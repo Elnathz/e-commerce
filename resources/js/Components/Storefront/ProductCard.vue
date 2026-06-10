@@ -50,6 +50,14 @@ const getGroupedVariants = (variants) => {
     });
     return Object.values(groups);
 };
+
+// Calculate total available stock across variants
+const getTotalStock = (product) => {
+    if (product.variants && product.variants.length > 0) {
+        return product.variants.reduce((total, v) => total + (Math.max(0, v.stock - (v.reserved_stock || 0))), 0);
+    }
+    return 0;
+};
 </script>
 
 <template>
@@ -82,12 +90,17 @@ const getGroupedVariants = (variants) => {
                 </template>
             </div>
 
-            <!-- Price -->
-            <div class="mt-auto pt-1">
-                <div class="text-base font-bold text-gray-900">{{ formatPrice(getLowestPrice(product)) }}</div>
-                <div v-if="product.base_price > getLowestPrice(product)" class="flex items-center gap-1.5 mt-0.5">
-                    <span class="text-xs text-gray-400 line-through">{{ formatPrice(product.base_price) }}</span>
-                    <span class="text-[11px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">{{ getDiscount(product) }}%</span>
+            <!-- Price and Stock -->
+            <div class="mt-auto pt-1 flex justify-between items-end">
+                <div>
+                    <div class="text-base font-bold text-gray-900">{{ formatPrice(getLowestPrice(product)) }}</div>
+                    <div v-if="product.base_price > getLowestPrice(product)" class="flex items-center gap-1.5 mt-0.5">
+                        <span class="text-xs text-gray-400 line-through">{{ formatPrice(product.base_price) }}</span>
+                        <span class="text-[11px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">{{ getDiscount(product) }}%</span>
+                    </div>
+                </div>
+                <div class="text-[11px] text-gray-500 mb-0.5 text-right whitespace-nowrap">
+                    Sisa: <span class="font-medium" :class="{'text-red-600': getTotalStock(product) <= 5}">{{ getTotalStock(product) }}</span>
                 </div>
             </div>
         </div>

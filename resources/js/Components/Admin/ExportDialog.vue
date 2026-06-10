@@ -59,38 +59,38 @@ const close = () => {
 
 <template>
     <Modal :show="show" @close="close" maxWidth="md">
-        <div class="p-6">
-            <h2 class="text-lg font-medium text-gray-900 dark:text-gray-100">
+        <div class="p-6 bg-white">
+            <h2 class="text-xl font-bold text-gray-800 border-b pb-3 mb-4">
                 Export Data Pesanan
             </h2>
 
             <div class="mt-4 space-y-4">
-                <div v-if="successMsg" class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50 dark:bg-gray-800 dark:text-green-400" role="alert">
+                <div v-if="successMsg" class="p-4 mb-4 text-sm text-green-800 rounded-lg bg-green-50" role="alert">
                     <span class="font-medium">Berhasil!</span> {{ successMsg }}
                     <div class="mt-2 text-xs">
-                        <a :href="route('admin.exports.index')" target="_blank" class="underline">Lihat riwayat export</a>
+                        <a :href="route('admin.exports.index')" target="_blank" class="underline font-bold text-green-700">Lihat riwayat export &rarr;</a>
                     </div>
                 </div>
 
-                <div v-if="errorMsg" class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50 dark:bg-gray-800 dark:text-red-400" role="alert">
+                <div v-if="errorMsg" class="p-4 mb-4 text-sm text-red-800 rounded-lg bg-red-50" role="alert">
                     <span class="font-medium">Gagal!</span> {{ errorMsg }}
                     <div v-if="suggestionMsg" class="mt-1 text-xs italic">{{ suggestionMsg }}</div>
                 </div>
 
-                <div v-if="!successMsg">
+                <div v-if="!successMsg" class="space-y-5">
                     <div>
-                        <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Tanggal Mulai</label>
-                        <input type="date" v-model="filters.start_date" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                        <label class="block font-semibold text-sm text-gray-700 mb-1">Tanggal Mulai</label>
+                        <input type="date" v-model="filters.start_date" class="block w-full border-gray-300 bg-white text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg shadow-sm transition">
                     </div>
                     
-                    <div class="mt-4">
-                        <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Tanggal Akhir</label>
-                        <input type="date" v-model="filters.end_date" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                    <div>
+                        <label class="block font-semibold text-sm text-gray-700 mb-1">Tanggal Akhir</label>
+                        <input type="date" v-model="filters.end_date" class="block w-full border-gray-300 bg-white text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg shadow-sm transition">
                     </div>
                     
-                    <div class="mt-4">
-                        <label class="block font-medium text-sm text-gray-700 dark:text-gray-300">Status Order</label>
-                        <select v-model="filters.status" class="mt-1 block w-full border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-indigo-500 dark:focus:border-indigo-600 focus:ring-indigo-500 dark:focus:ring-indigo-600 rounded-md shadow-sm">
+                    <div>
+                        <label class="block font-semibold text-sm text-gray-700 mb-1">Status Order</label>
+                        <select v-model="filters.status" class="block w-full border-gray-300 bg-white text-gray-900 focus:border-indigo-500 focus:ring-indigo-500 rounded-lg shadow-sm transition">
                             <option value="">Semua Status</option>
                             <option value="completed">Completed</option>
                             <option value="paid">Paid</option>

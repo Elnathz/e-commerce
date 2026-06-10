@@ -46,7 +46,7 @@ class ProductSeeder extends Seeder
                 ],
                 'variants' => [
                     [
-                        'sku' => 'IP17-BLK', 'name' => 'Black', 'variant_type' => 'Warna', 'price' => 15000000, 'stock' => 100,
+                        'sku' => 'IP17-BLK', 'name' => 'Black', 'variant_type' => 'Warna', 'price' => 15000000, 'stock' => 0,
                         'images' => [
                             'ip17/ipon17blackutama.webp',
                             'ip17/black/iphone-17-black-depan.webp',
@@ -55,7 +55,7 @@ class ProductSeeder extends Seeder
                         ]
                     ],
                     [
-                        'sku' => 'IP17-WHT', 'name' => 'White', 'variant_type' => 'Warna', 'price' => 17000000, 'stock' => 50,
+                        'sku' => 'IP17-WHT', 'name' => 'White', 'variant_type' => 'Warna', 'price' => 17000000, 'stock' => 3,
                         'images' => [
                             'ip17/ipon17whiteutama.webp',
                             'ip17/white/iphone-17-white-depan.webp',
@@ -87,7 +87,7 @@ class ProductSeeder extends Seeder
                 'weight_gram' => 50,
                 'general_images' => [],
                 'variants' => [
-                    ['sku' => 'CBL-BLK', 'name' => 'Hitam', 'variant_type' => 'Warna', 'price' => 15000, 'stock' => 500, 'images' => ['pelapiskabelinsulasi.jpg']],
+                    ['sku' => 'CBL-BLK', 'name' => 'Hitam', 'variant_type' => 'Warna', 'price' => 15000, 'stock' => 0, 'images' => ['pelapiskabelinsulasi.jpg']],
                     ['sku' => 'CBL-RED', 'name' => 'Merah', 'variant_type' => 'Warna', 'price' => 15000, 'stock' => 500, 'images' => ['pelapiskabelinsulasi.jpg']],
                 ]
             ],
@@ -100,8 +100,8 @@ class ProductSeeder extends Seeder
                 'weight_gram' => 450,
                 'general_images' => [],
                 'variants' => [
-                    ['sku' => 'FISH-1000', 'name' => '1000 Series', 'variant_type' => 'Seri', 'price' => 120000, 'stock' => 40, 'images' => ['rellpancing.jpg']],
-                    ['sku' => 'FISH-2000', 'name' => '2000 Series', 'variant_type' => 'Seri', 'price' => 150000, 'stock' => 30, 'images' => ['rellpancing.jpg']],
+                    ['sku' => 'REEL-1000', 'name' => 'Ukuran 1000', 'variant_type' => 'Ukuran', 'price' => 150000, 'stock' => 4, 'images' => ['relpancing.jpg']],
+                    ['sku' => 'REEL-2000', 'name' => 'Ukuran 2000', 'variant_type' => 'Ukuran', 'price' => 175000, 'stock' => 1, 'images' => ['relpancing.jpg']],
                 ]
             ],
             [
