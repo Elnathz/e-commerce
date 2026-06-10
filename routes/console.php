@@ -22,3 +22,6 @@ Schedule::command('exports:cleanup')->dailyAt('03:00');
 
 // Sprint 9: Prune old notification dispatches (monthly)
 Schedule::command('notifications:prune-dispatches')->monthly();
+
+// Sprint 10: Cleanup activity logs (daily)
+Schedule::command('activitylogs:cleanup')->dailyAt('04:00');

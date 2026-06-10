@@ -69,10 +69,14 @@ class ReturnController extends Controller
                 return back()->with('error', 'Transisi status tidak diizinkan.');
             }
 
+            $from_status = $returnRequest->status;
+
             $returnRequest->update([
                 'status' => 'approved',
                 'expires_at' => now()->addDays(3), // Admin SLA for approval is 3 days, customer has 3 days to ship
             ]);
+            
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, 'approved'));
             
             $returnRequest->histories()->create([
                 'from_status' => 'submitted',
@@ -105,6 +109,8 @@ class ReturnController extends Controller
                 'admin_notes' => $request->admin_notes,
             ]);
 
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, 'rejected'));
+
             $returnRequest->histories()->create([
                 'from_status' => $from_status,
                 'to_status' => 'rejected',
@@ -131,6 +137,8 @@ class ReturnController extends Controller
                 'status' => 'received',
                 'return_received_at' => now(),
             ]);
+
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, 'received'));
 
             $returnRequest->histories()->create([
                 'from_status' => $from_status,
@@ -216,6 +224,8 @@ class ReturnController extends Controller
 
             $returnRequest->update($updateData);
 
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, $newStatus));
+
             $returnRequest->histories()->create([
                 'from_status' => $from_status,
                 'to_status' => $newStatus,
@@ -244,6 +254,8 @@ class ReturnController extends Controller
                 'status' => 'refund_processed',
                 'refund_processed_at' => now(),
             ]);
+
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, 'refund_processed'));
 
             $order = $returnRequest->order;
             // Calculate if it's partial or full refund based on total vs refund_amount
@@ -278,6 +290,8 @@ class ReturnController extends Controller
             $returnRequest->update([
                 'status' => 'completed',
             ]);
+
+            event(new \App\Events\ReturnRequestStatusChanged($returnRequest, $from_status, 'completed'));
 
             $returnRequest->histories()->create([
                 'from_status' => $from_status,

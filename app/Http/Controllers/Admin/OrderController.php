@@ -53,10 +53,14 @@ class OrderController extends Controller
             return back()->with('error', 'Hanya pesanan berstatus "Dibayar" yang bisa diproses.');
         }
 
+        $fromStatus = $order->status;
+
         $order->update([
             'status' => 'processing',
             'processing_at' => now(),
         ]);
+
+        event(new \App\Events\OrderStatusChanged($order, $fromStatus, 'processing'));
 
         return back()->with('success', 'Pesanan sedang diproses dan dikemas.');
     }
@@ -70,6 +74,8 @@ class OrderController extends Controller
             return back()->with('error', 'Pastikan pesanan sudah dalam status "Diproses" sebelum dikirim.');
         }
 
+        $fromStatus = $order->status;
+
         $validated = $request->validate([
             'tracking_number' => 'required|string|max:200',
         ]);
@@ -79,6 +85,8 @@ class OrderController extends Controller
             'tracking_number' => $validated['tracking_number'],
             'shipped_at' => now(),
         ]);
+
+        event(new \App\Events\OrderStatusChanged($order, $fromStatus, 'shipped'));
 
         return back()->with('success', 'Pesanan berhasil dikirim dan nomor resi telah disimpan.');
     }

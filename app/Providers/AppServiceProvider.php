@@ -41,5 +41,14 @@ class AppServiceProvider extends ServiceProvider
         
         \App\Models\Review::observe(\App\Observers\ReviewObserver::class);
         \App\Models\Promotion::observe(\App\Observers\PromotionObserver::class);
+
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\OrderStatusChanged::class,
+            [\App\Listeners\RecordActivityLog::class, 'handleOrderStatus']
+        );
+        \Illuminate\Support\Facades\Event::listen(
+            \App\Events\ReturnRequestStatusChanged::class,
+            [\App\Listeners\RecordActivityLog::class, 'handleReturnStatus']
+        );
     }
 }

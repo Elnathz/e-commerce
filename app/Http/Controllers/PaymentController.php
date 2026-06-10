@@ -261,6 +261,8 @@ class PaymentController extends Controller
             ])),
         ]);
 
+        $fromStatus = $order->status;
+
         // Update order status
         $order->update([
             'status' => 'paid',
@@ -268,6 +270,8 @@ class PaymentController extends Controller
             'paid_at' => now(),
             'payment_method' => $payment->payment_channel,
         ]);
+
+        event(new \App\Events\OrderStatusChanged($order, $fromStatus, 'paid'));
 
         // FR010: Convert stock reservation to permanent deduction
         // reserved_stock -= qty AND stock -= qty (atomic)
@@ -343,6 +347,8 @@ class PaymentController extends Controller
                     ]);
             }
 
+            $fromStatus = $order->status;
+
             $order->update([
                 'status' => 'cancelled',
                 'payment_status' => 'failed',
@@ -351,6 +357,8 @@ class PaymentController extends Controller
                     ? 'Batas waktu pembayaran habis'
                     : 'Pembayaran gagal',
             ]);
+
+            event(new \App\Events\OrderStatusChanged($order, $fromStatus, 'cancelled'));
 
             // Sprint 9: Release Promotion Usage (Phase 2B)
             app(\App\Services\PromotionService::class)->release($order->id);
