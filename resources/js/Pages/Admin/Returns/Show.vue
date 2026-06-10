@@ -102,7 +102,7 @@ const inspectForm = useForm({
     admin_notes: '',
     items: props.returnRequest.items.map(item => ({
         id: item.id,
-        refund_amount: 0,
+        refund_amount: item.suggested_refund ?? 0,
         restock: false,
     }))
 });
@@ -407,6 +407,7 @@ const submitComplete = () => {
                                 <div>
                                     <label class="block text-xs font-medium text-gray-700">Nominal Refund (Rp)</label>
                                     <input type="number" v-model="inspectForm.items[idx].refund_amount" min="0" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm">
+                                    <p class="text-xs text-green-600 mt-1 font-medium" v-if="item.suggested_refund !== undefined">Saran Prorata: Rp {{ formatPrice(item.suggested_refund) }}</p>
                                 </div>
                                 <div class="flex items-center pt-6">
                                     <label class="flex items-center cursor-pointer">

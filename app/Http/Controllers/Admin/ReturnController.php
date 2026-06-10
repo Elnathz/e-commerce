@@ -30,13 +30,35 @@ class ReturnController extends Controller
 
     public function show(ReturnRequest $returnRequest)
     {
-        $returnRequest->load(['user', 'order.items.productVariant.product', 'items', 'histories' => function($q) {
+        $returnRequest->load(['user', 'order.items.productVariant.product', 'items.orderItem', 'histories' => function($q) {
             $q->latest();
         }]);
+
+        // Calculate prorated refund suggestion
+        $order = $returnRequest->order;
+        $returnRequest->items->each(function ($item) use ($order) {
+            $orderItem = $item->orderItem;
+            $itemSubtotal = $orderItem ? ($item->quantity * $orderItem->unit_price) : 0;
+            $item->suggested_refund = $this->calculateProratedRefund($order, $itemSubtotal);
+        });
 
         return Inertia::render('Admin/Returns/Show', [
             'returnRequest' => $returnRequest,
         ]);
+    }
+
+    /**
+     * Hitung refund prorata untuk satu item retur.
+     * Scope: hanya discount_amount vs subtotal.
+     * Shipping dan free-shipping voucher tidak masuk hitungan.
+     */
+    public function calculateProratedRefund(\App\Models\Order $order, float $itemSubtotal): float
+    {
+        if ($order->subtotal <= 0 || $order->discount_amount <= 0) {
+            return round($itemSubtotal, 2);
+        }
+        $discountRatio = min($order->discount_amount / $order->subtotal, 1.0); // cap 1.0 guard
+        return round($itemSubtotal * (1 - $discountRatio), 2);
     }
 
     public function approve(Request $request, ReturnRequest $returnRequest)
