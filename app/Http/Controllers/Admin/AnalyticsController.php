@@ -21,6 +21,8 @@ class AnalyticsController extends Controller
     {
         $period = $request->query('period', 'month');
         $comparePeriod = $request->query('compare_period', 'previous_period');
+        $chartGrouping = $request->query('chart_grouping', 'auto');
+        $topProductsLimit = (int) $request->query('top_products_limit', 5);
         $user = Auth::user();
         
         $metrics = [];
@@ -35,7 +37,7 @@ class AnalyticsController extends Controller
 
         if ($isOwner) {
             // Hanya owner yang boleh menarik data finansial (simulasi pemisahan service)
-            $financial = $this->analyticsService->getFinancialMetrics($period, $comparePeriod);
+            $financial = $this->analyticsService->getFinancialMetrics($period, $comparePeriod, $chartGrouping, $topProductsLimit);
         } else {
             $financial = [
                 'period_start' => $periodStart,
@@ -53,7 +55,7 @@ class AnalyticsController extends Controller
                 // Non-financial metrics that should still be visible
                 'payment_summary' => $this->analyticsService->getPaymentSummary($periodStart, $periodEnd),
                 'logistics_performance' => $this->analyticsService->getLogisticsPerformance($periodStart, $periodEnd),
-                'sales_chart' => $this->analyticsService->getSalesChartData($periodStart, $periodEnd, $period),
+                'sales_chart' => $this->analyticsService->getSalesChartData($periodStart, $periodEnd, $period, $chartGrouping),
             ];
             
             // Catat jika bukan owner tapi mencoba mengakses API endpoint spesifik revenue (jika dibuat)
@@ -65,6 +67,10 @@ class AnalyticsController extends Controller
                 'period' => $period,
                 'compare_period' => $comparePeriod,
             ]),
+            'filters' => [
+                'chart_grouping' => $chartGrouping,
+                'top_products_limit' => $topProductsLimit,
+            ],
             'lowStockProducts' => $lowStockProducts,
             'isOwner' => $isOwner,
         ]);

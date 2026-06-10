@@ -40,14 +40,22 @@ const props = defineProps({
 
 const selectedPeriod = ref(props.metrics.period || 'month');
 const comparePeriod = ref(props.metrics.compare_period || 'previous_period');
+const chartGrouping = ref(props.filters?.chart_grouping || 'auto');
+const topProductsLimit = ref(props.filters?.top_products_limit || 5);
 
 const setPeriod = (period) => {
     selectedPeriod.value = period;
 };
 
-watch([selectedPeriod, comparePeriod], ([newPeriod, newCompare]) => {
-    router.get(route('admin.dashboard'), { period: newPeriod, compare_period: newCompare }, {
+watch([selectedPeriod, comparePeriod, chartGrouping, topProductsLimit], ([newPeriod, newCompare, newChartGrouping, newLimit]) => {
+    router.get(route('admin.dashboard'), { 
+        period: newPeriod, 
+        compare_period: newCompare,
+        chart_grouping: newChartGrouping,
+        top_products_limit: newLimit
+    }, {
         preserveState: true,
+        preserveScroll: true,
         replace: true,
     });
 });
@@ -217,10 +225,10 @@ const paymentChartOptions = {
 
                     <div class="flex flex-col lg:flex-row items-center gap-4 text-sm w-full xl:w-auto">
                         <!-- Date Picker -->
-                        <div class="relative w-full lg:w-56 z-10">
-                            <button @click="showCustomDate = !showCustomDate" class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm text-left flex items-center justify-between hover:bg-gray-50 transition">
-                                <span>{{ displayDateRange }}</span>
-                                <span class="text-xs text-gray-400">▼</span>
+                        <div class="relative w-full lg:w-auto min-w-[260px] z-10">
+                            <button @click="showCustomDate = !showCustomDate" class="w-full pl-10 pr-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm text-left flex items-center justify-between gap-2 hover:bg-gray-50 transition">
+                                <span class="whitespace-nowrap">{{ displayDateRange }}</span>
+                                <span class="text-xs text-gray-400 shrink-0">▼</span>
                             </button>
                             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                                 📅
@@ -298,29 +306,29 @@ const paymentChartOptions = {
                             <p class="text-xs text-gray-500 mb-4 border-l-2 border-gray-300 pl-2">Data operasional di bawah ini adalah kondisi riil saat ini (Real-time), mengabaikan filter tanggal di atas.</p>
                             
                             <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                <Link :href="route('admin.orders.index', { status: 'paid' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
-                                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Need Fulfillment</div>
+                                <Link :href="route('admin.orders.index', { status: 'paid' })" :class="['block border rounded-lg p-4 pb-8 hover:shadow-md transition relative group', metrics.need_fulfillment > 0 ? 'bg-blue-50 border-blue-200' : 'bg-green-50/50 border-green-100']">
+                                    <div :class="['text-xs font-bold uppercase tracking-wider mb-2', metrics.need_fulfillment > 0 ? 'text-blue-700' : 'text-green-700']">Need Fulfillment</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.need_fulfillment || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Order Paid menanti proses</div>
                                     <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
                                 
-                                <Link :href="route('admin.returns.index', { status: 'submitted' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
-                                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Antrean Retur Baru</div>
+                                <Link :href="route('admin.returns.index', { status: 'submitted' })" :class="['block border rounded-lg p-4 pb-8 hover:shadow-md transition relative group', metrics.awaiting_approval > 0 ? 'bg-amber-50 border-amber-200' : 'bg-green-50/50 border-green-100']">
+                                    <div :class="['text-xs font-bold uppercase tracking-wider mb-2', metrics.awaiting_approval > 0 ? 'text-amber-700' : 'text-green-700']">Antrean Retur Baru</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.awaiting_approval || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Menunggu approval Admin</div>
                                     <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
                                 
-                                <Link :href="route('admin.products.index', { filter: 'low_stock' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
-                                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Stok Kritis</div>
+                                <Link :href="route('admin.products.index', { filter: 'low_stock' })" :class="['block border rounded-lg p-4 pb-8 hover:shadow-md transition relative group', metrics.low_stock_count > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50/50 border-green-100']">
+                                    <div :class="['text-xs font-bold uppercase tracking-wider mb-2', metrics.low_stock_count > 0 ? 'text-red-700 animate-pulse' : 'text-green-700']">Stok Kritis</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.low_stock_count || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Varian produk batas bawah</div>
                                     <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
                                 </Link>
 
-                                <Link :href="route('admin.returns.index', { status: 'received' })" class="block bg-green-50/50 border border-green-100 rounded-lg p-4 pb-8 hover:shadow-md transition relative group">
-                                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">Inspeksi Retur</div>
+                                <Link :href="route('admin.returns.index', { status: 'received' })" :class="['block border rounded-lg p-4 pb-8 hover:shadow-md transition relative group', metrics.awaiting_inspection > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50/50 border-green-100']">
+                                    <div :class="['text-xs font-bold uppercase tracking-wider mb-2', metrics.awaiting_inspection > 0 ? 'text-orange-700' : 'text-green-700']">Inspeksi Retur</div>
                                     <div class="text-3xl font-black text-gray-900">{{ metrics.awaiting_inspection || 0 }}</div>
                                     <div class="text-xs text-gray-500 mt-1">Barang tiba, perlu diperiksa</div>
                                     <div class="absolute bottom-3 right-4 text-xs font-bold text-indigo-600 opacity-0 group-hover:opacity-100 transition">Lihat Detail &rarr;</div>
@@ -426,9 +434,11 @@ const paymentChartOptions = {
                             <section class="md:col-span-3 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                                 <div class="flex justify-between items-center mb-4">
                                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Trend Penjualan</h3>
-                                    <select class="text-xs border-gray-200 rounded-md py-1 px-2 text-gray-600">
-                                        <option>Harian</option>
-                                        <option>Mingguan</option>
+                                    <select v-model="chartGrouping" class="text-xs border-gray-200 rounded-md py-1 pl-2 pr-8 text-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="auto">Auto</option>
+                                        <option value="daily">Harian</option>
+                                        <option value="weekly">Mingguan</option>
+                                        <option value="monthly">Bulanan</option>
                                     </select>
                                 </div>
                                 <div class="h-64 w-full">
@@ -440,19 +450,19 @@ const paymentChartOptions = {
                             <section class="md:col-span-2 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
                                 <div class="flex justify-between items-center mb-4">
                                     <h3 class="text-sm font-bold text-gray-500 uppercase tracking-wider">Produk Terlaris</h3>
-                                    <select class="text-xs border-gray-200 rounded-md py-1 px-2 text-gray-600">
-                                        <option>Top 5</option>
-                                        <option>Top 10</option>
+                                    <select v-model="topProductsLimit" class="text-xs border-gray-200 rounded-md py-1 pl-2 pr-8 text-gray-600 focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option :value="5">Top 5</option>
+                                        <option :value="10">Top 10</option>
                                     </select>
                                 </div>
                                 <div class="space-y-4">
-                                    <div v-for="(prod, i) in metrics.top_products?.slice(0, 5) || [{name:'Produk A', total_sold:230}, {name:'Produk B', total_sold:198}, {name:'Produk C', total_sold:156}, {name:'Produk D', total_sold:120}, {name:'Produk E', total_sold:98}]" :key="i">
+                                    <div v-for="(prod, i) in metrics.top_products || []" :key="i">
                                         <div class="flex justify-between text-xs mb-1">
                                             <span class="font-medium text-gray-800">{{ i+1 }}. {{ prod.name }}</span>
                                             <span class="font-bold text-gray-600">{{ prod.total_sold }}</span>
                                         </div>
                                         <div class="w-full bg-gray-100 rounded-full h-1.5">
-                                            <div class="bg-indigo-500 h-1.5 rounded-full" :style="{ width: ((prod.total_sold / 230) * 100) + '%' }"></div>
+                                            <div class="bg-indigo-500 h-1.5 rounded-full" :style="{ width: ((prod.total_sold / (metrics.top_products[0]?.total_sold || 1)) * 100) + '%' }"></div>
                                         </div>
                                     </div>
                                 </div>

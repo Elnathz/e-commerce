@@ -159,14 +159,14 @@ class AnalyticsDashboardService
     /**
      * Get Financial Metrics (Cached)
      */
-    public function getFinancialMetrics(string $period = 'today', string $comparePeriod = 'previous_period'): array
+    public function getFinancialMetrics(string $period = 'today', string $comparePeriod = 'previous_period', string $chartGrouping = 'auto', int $topProductsLimit = 5): array
     {
         [$startDate, $endDate] = $this->resolvePeriod($period);
         [$prevStartDate, $prevEndDate] = $this->resolvePreviousPeriod($period, $comparePeriod);
 
-        $cacheKey = "dashboard_financial_metrics_{$period}_{$comparePeriod}_{$startDate}_{$endDate}";
+        $cacheKey = "dashboard_financial_metrics_{$period}_{$comparePeriod}_{$startDate}_{$endDate}_{$chartGrouping}_{$topProductsLimit}";
 
-        return Cache::remember($cacheKey, 60 * 60, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate, $period) {
+        return Cache::remember($cacheKey, 60 * 60, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate, $period, $chartGrouping, $topProductsLimit) {
             $currentGross = $this->calculateGrossSales($startDate, $endDate);
             $prevGross = $this->calculateGrossSales($prevStartDate, $prevEndDate);
             
@@ -208,7 +208,7 @@ class AnalyticsDashboardService
                 'checkout_to_paid_rate' => $currentCheckoutToPaidRate,
                 'checkout_to_paid_rate_trend' => $this->calculateTrend($currentCheckoutToPaidRate, $prevCheckoutToPaidRate),
                 
-                'top_products'     => $this->getTopProducts($startDate, $endDate, 3), // Only top 3 for visual
+                'top_products'     => $this->getTopProducts($startDate, $endDate, $topProductsLimit),
                 
                 'order_return_rate'=> $currentOrderReturnRate,
                 'order_return_rate_trend' => $this->calculateTrend($currentOrderReturnRate, $prevOrderReturnRate),
@@ -217,7 +217,7 @@ class AnalyticsDashboardService
 
                 'payment_summary'  => $this->getPaymentSummary($startDate, $endDate),
                 'logistics_performance' => $this->getLogisticsPerformance($startDate, $endDate),
-                'sales_chart'      => $this->getSalesChartData($startDate, $endDate, $period),
+                'sales_chart'      => $this->getSalesChartData($startDate, $endDate, $period, $chartGrouping),
             ];
         });
     }
@@ -308,10 +308,16 @@ class AnalyticsDashboardService
     /**
      * Get Sales Chart Data
      */
-    public function getSalesChartData(string $startDate, string $endDate, string $period): array
+    public function getSalesChartData(string $startDate, string $endDate, string $period, string $chartGrouping = 'auto'): array
     {
         $diffDays = \Carbon\Carbon::parse($startDate)->diffInDays(\Carbon\Carbon::parse($endDate));
-        $groupBy = $diffDays > 31 ? 'month' : 'day';
+        
+        $groupBy = 'day';
+        if ($chartGrouping === 'auto') {
+            $groupBy = $diffDays > 31 ? 'month' : 'day';
+        } elseif (in_array($chartGrouping, ['daily', 'weekly', 'monthly'])) {
+            $groupBy = str_replace('ly', '', $chartGrouping); // day, week, month
+        }
 
         $orders = Order::whereIn('status', ['completed', 'refunded'])
             ->whereDate('paid_at', '>=', $startDate)
@@ -323,6 +329,7 @@ class AnalyticsDashboardService
                              ->orderBy('date')
                              ->get();
         } else {
+            // For both week and day, we fetch daily data first
             $orders = $orders->selectRaw('DATE(paid_at) as date, SUM(total_amount) as gross_sales')
                              ->groupBy('date')
                              ->orderBy('date')
@@ -353,24 +360,52 @@ class AnalyticsDashboardService
 
         // Build complete date range
         $current = \Carbon\Carbon::parse($startDate);
+        if ($groupBy === 'week') {
+            $current->startOfWeek();
+        }
         $end = \Carbon\Carbon::parse($endDate);
 
         while ($current <= $end) {
-            $key = $groupBy === 'month' ? $current->format('Y-m') : $current->format('Y-m-d');
-            $label = $groupBy === 'month' ? $current->translatedFormat('M Y') : $current->translatedFormat('j M');
-            
-            if (!in_array($label, $labels)) {
-                $labels[] = $label;
+            if ($groupBy === 'month') {
+                $key = $current->format('Y-m');
+                $label = $current->translatedFormat('M Y');
                 $gross = $orders->firstWhere('date', $key)->gross_sales ?? 0;
                 $refund = $refunds->firstWhere('date', $key)->total_refund ?? 0;
-                $grossData[] = (float) $gross;
-                $refundData[] = (float) $refund;
+                $current->addMonth();
+            } elseif ($groupBy === 'week') {
+                $weekEnd = $current->copy()->endOfWeek();
+                if ($weekEnd > $end) {
+                    $weekEnd = $end->copy(); // Cap at end date
+                }
+                
+                $label = $current->translatedFormat('j M') . ' - ' . $weekEnd->translatedFormat('j M');
+                
+                $weekGross = $orders->filter(function($o) use ($current, $weekEnd) {
+                    $d = \Carbon\Carbon::parse($o->date);
+                    return $d >= $current && $d <= $weekEnd;
+                })->sum('gross_sales');
+
+                $weekRefund = $refunds->filter(function($r) use ($current, $weekEnd) {
+                    $d = \Carbon\Carbon::parse($r->date);
+                    return $d >= $current && $d <= $weekEnd;
+                })->sum('total_refund');
+
+                $gross = $weekGross;
+                $refund = $weekRefund;
+                
+                $current->addWeek();
+            } else {
+                $key = $current->format('Y-m-d');
+                $label = $current->translatedFormat('j M');
+                $gross = $orders->firstWhere('date', $key)->gross_sales ?? 0;
+                $refund = $refunds->firstWhere('date', $key)->total_refund ?? 0;
+                $current->addDay();
             }
 
-            if ($groupBy === 'month') {
-                $current->addMonth();
-            } else {
-                $current->addDay();
+            if (!in_array($label, $labels)) {
+                $labels[] = $label;
+                $grossData[] = (float) $gross;
+                $refundData[] = (float) $refund;
             }
         }
 

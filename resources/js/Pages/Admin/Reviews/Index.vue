@@ -172,12 +172,17 @@ const togglePublish = (review) => {
                             <button @click="queueFilter = 'all'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors', queueFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200']">
                                 Semua Review
                             </button>
-                            <button @click="queueFilter = 'action_needed'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors', queueFilter === 'action_needed' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100']">
+                            <button @click="queueFilter = 'action_needed'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2', queueFilter === 'action_needed' ? 'bg-red-600 text-white' : 'bg-red-50 text-red-600 hover:bg-red-100']">
                                 Perlu Tindakan
+                                <span class="px-1.5 py-0.5 rounded text-xs" :class="queueFilter === 'action_needed' ? 'bg-white/20 text-white' : 'bg-red-200 text-red-700'">{{ stats.action_needed_reviews }}</span>
                             </button>
                             <button @click="queueFilter = 'unreplied'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2', queueFilter === 'unreplied' ? 'bg-amber-500 text-white' : 'bg-amber-50 text-amber-600 hover:bg-amber-100']">
                                 Belum Dibalas
-                                <span class="bg-white/20 px-1.5 py-0.5 rounded text-xs">{{ stats.unreplied_reviews }}</span>
+                                <span class="px-1.5 py-0.5 rounded text-xs" :class="queueFilter === 'unreplied' ? 'bg-white/20 text-white' : 'bg-amber-200 text-amber-800'">{{ stats.unreplied_reviews }}</span>
+                            </button>
+                            <button @click="queueFilter = 'replied'" :class="['px-4 py-2 rounded-full text-sm font-semibold whitespace-nowrap transition-colors flex items-center gap-2', queueFilter === 'replied' ? 'bg-green-600 text-white' : 'bg-green-50 text-green-700 hover:bg-green-100']">
+                                Sudah Dibalas
+                                <span class="px-1.5 py-0.5 rounded text-xs" :class="queueFilter === 'replied' ? 'bg-white/20 text-white' : 'bg-green-200 text-green-800'">{{ stats.replied_reviews }}</span>
                             </button>
                         </div>
                         

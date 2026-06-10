@@ -23,6 +23,8 @@ class ReviewController extends Controller
             'total_reviews' => Review::count(),
             'average_rating' => round(Review::avg('rating') ?? 0, 1),
             'unreplied_reviews' => Review::whereNull('admin_reply')->count(),
+            'action_needed_reviews' => Review::where('rating', '<=', 2)->whereNull('admin_reply')->count(),
+            'replied_reviews' => Review::whereNotNull('admin_reply')->count(),
             'distribution' => [
                 5 => $distribution[5] ?? 0,
                 4 => $distribution[4] ?? 0,
@@ -52,10 +54,12 @@ class ReviewController extends Controller
                 });
             } elseif ($request->queue === 'unreplied') {
                 $query->whereNull('admin_reply');
+            } elseif ($request->queue === 'replied') {
+                $query->whereNotNull('admin_reply');
             }
         }
 
-        $reviews = $query->paginate(20)->withQueryString();
+        $reviews = $query->paginate(10)->withQueryString();
 
         return Inertia::render('Admin/Reviews/Index', [
             'reviews' => $reviews,
