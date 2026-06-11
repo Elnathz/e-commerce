@@ -37,13 +37,7 @@ class ReviewController extends Controller
             ->firstOrFail();
 
         // Cek eligibility item terhadap retur
-        $activeReturnItem = \App\Models\ReturnRequestItem::where('order_item_id', $orderItem->id)
-            ->whereHas('returnRequest', function ($query) {
-                $query->whereIn('status', ['submitted', 'approved', 'received', 'inspected']);
-            })
-            ->exists();
-            
-        if ($activeReturnItem) {
+        if ($orderItem->hasActiveReturn()) {
             return back()->with('error', 'Produk ini sedang dalam proses retur dan belum dapat diberi ulasan.');
         }
 

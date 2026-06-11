@@ -44,9 +44,14 @@ class StorefrontController extends Controller
                 $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
             },
             'reviews' => function($q) {
-                $q->where('is_published', true)->latest()->with(['user', 'images']);
+                $q->where('is_published', true)->latest()->with(['user', 'images', 'orderItem.returnRequestItems.returnRequest']);
             }
         ])->where('slug', $slug)->where('is_active', true)->firstOrFail();
+
+        // §1c / #44: review return-badge — "Sudah Direfund" / "Pernah Ajukan Retur".
+        $product->reviews->each(function ($review) {
+            $review->return_badge = $review->orderItem?->reviewReturnBadge()['outcome'] ?? null;
+        });
 
         // Related products from the same category
         $relatedProducts = Product::with(['variants' => function($q) {

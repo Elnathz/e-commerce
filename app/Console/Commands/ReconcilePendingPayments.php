@@ -54,12 +54,14 @@ class ReconcilePendingPayments extends Command
                         $lockedOrder = \App\Models\Order::where('id', $order->id)->lockForUpdate()->first();
                         
                         if ($lockedOrder->status === 'pending') {
+                            $fromStatus = $lockedOrder->status;
                             $lockedOrder->status = 'paid';
+                            $lockedOrder->payment_status = 'paid';
                             $lockedOrder->paid_at = now();
                             $lockedOrder->save();
 
                             // Dispatch event agar notifikasi/stok tersinkron
-                            event(new \App\Events\OrderPaid($lockedOrder));
+                            event(new \App\Events\OrderStatusChanged($lockedOrder, $fromStatus, 'paid'));
                         }
                     });
 

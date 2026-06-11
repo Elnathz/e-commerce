@@ -73,9 +73,9 @@ class CancelExpiredOrders extends Command
                         'cancelled_reason' => 'Batas waktu pembayaran habis (otomatis)',
                     ]);
 
-                    // Release stock
+                    // Release stock (variant may be null if it was deleted)
                     foreach ($order->items as $item) {
-                        $item->variant->increment('stock', $item->quantity);
+                        $item->productVariant?->increment('stock', $item->quantity);
                     }
                 });
 

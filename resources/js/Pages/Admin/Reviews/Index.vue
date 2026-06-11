@@ -231,6 +231,13 @@ const togglePublish = (review) => {
                                     <span v-if="!review.is_published" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm bg-slate-200 text-slate-600 border border-slate-300">
                                         Disembunyikan
                                     </span>
+                                    <!-- §1c / #44: review return-badge (admin = differentiated, with link to return detail) -->
+                                    <span v-if="review.return_badge === 'refunded'" data-return-badge="refunded" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                        Sudah Direfund
+                                    </span>
+                                    <Link v-else-if="review.return_badge === 'requested'" :href="route('admin.returns.show', review.return_request_id)" data-return-badge="requested" class="px-2 py-0.5 text-[10px] font-bold uppercase rounded-sm bg-red-100 text-red-700 border border-red-200 hover:bg-red-200 transition-colors">
+                                        Retur Ditolak
+                                    </Link>
                                 </div>
                                 
                                 <Link :href="route('admin.products.edit', review.product.id)" class="block font-bold text-blue-600 hover:text-blue-800 leading-tight text-base mb-1 cursor-pointer">

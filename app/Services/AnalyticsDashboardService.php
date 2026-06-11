@@ -27,25 +27,46 @@ class AnalyticsDashboardService
      */
     public function getOperationalMetrics(): array
     {
+        $feed = $this->buildPriorityActionsFeed();
+        $slaBreaches = $this->getSLABreaches();
+        $lowStockCount = $this->countLowStockProducts();
+
         return [
             'need_fulfillment'    => Order::where('status', 'paid')->count(),
             'in_processing'       => Order::where('status', 'processing')->count(),
-            'low_stock_count'     => $this->countLowStockProducts(),
+            'low_stock_count'     => $lowStockCount,
             'awaiting_approval'   => ReturnRequest::where('status', 'submitted')->count(),
             'awaiting_inspection' => ReturnRequest::where('status', 'received')->count(),
-            'sla_breaches'        => $this->getSLABreaches(),
+            'sla_breaches'        => $slaBreaches,
             'revenue_at_risk'     => $this->getRevenueAtRisk(),
             'pending_shipment'    => $this->getPendingShipmentValue(),
             'oldest_order'        => $this->getOldestUnprocessedOrder(),
-            'priority_actions'    => $this->getPriorityActionsFeed(),
+            'priority_actions'    => array_slice($feed, 0, 10),
+            'today_focus'         => $this->getTodayFocusSummary($feed, $slaBreaches, $lowStockCount),
             'vouchers_alert'      => $this->getVouchersNeedingAttention(),
         ];
     }
 
     /**
      * Get Priority Actions Feed (Real-time task list)
+     *
+     * Ranking mengikuti kontrak prioritas §2.5 (tdd_changes_tracker.md #42, #46):
+     * priority_score = f(severity_tier, category_weight, age) — severity DOMINAN,
+     * category_weight & age hanya tiebreaker. Memperbaiki deviasi #42 (sort
+     * sebelumnya murni timestamp ASC, mengabaikan field `priority`).
      */
     public function getPriorityActionsFeed(): array
+    {
+        return array_slice($this->buildPriorityActionsFeed(), 0, 10);
+    }
+
+    /**
+     * Bangun seluruh priority actions feed (belum dipotong ke 10), terurut
+     * priority_score DESC. Dipakai oleh getPriorityActionsFeed() (slice 10) DAN
+     * getTodayFocusSummary() (§2.7, roll-up) agar keduanya berasal dari sumber
+     * yang identik — syarat integritas §2.7-C.
+     */
+    private function buildPriorityActionsFeed(): array
     {
         $feed = [];
 
@@ -54,17 +75,19 @@ class AnalyticsDashboardService
             ->orderBy('paid_at', 'asc')
             ->limit(5)
             ->get();
-        
+
         foreach ($orders as $order) {
-            $feed[] = [
-                'id' => $order->id,
-                'type' => 'order_paid',
-                'title' => 'Pesanan Baru: ' . $order->order_number,
-                'message' => 'Menunggu untuk diproses dan dikemas.',
-                'action_url' => route('admin.orders.show', $order->id),
-                'timestamp' => $order->paid_at,
-                'priority' => 'high'
-            ];
+            $feed[] = $this->buildPriorityActionItem(
+                id: $order->id,
+                type: 'order_paid',
+                title: 'Pesanan Baru: ' . $order->order_number,
+                message: 'Menunggu untuk diproses dan dikemas.',
+                actionUrl: route('admin.orders.show', $order->id),
+                timestamp: $order->paid_at,
+                priority: 'high',
+                categoryWeight: 2,
+                breachThresholdHours: 24, // selaras order_paid_overdue (getSLABreaches)
+            );
         }
 
         // 2. Retur yang butuh persetujuan
@@ -72,17 +95,19 @@ class AnalyticsDashboardService
             ->orderBy('created_at', 'asc')
             ->limit(5)
             ->get();
-            
+
         foreach ($returns as $ret) {
-            $feed[] = [
-                'id' => $ret->id,
-                'type' => 'return_submitted',
-                'title' => 'Pengajuan Retur: ' . $ret->return_number,
-                'message' => 'Menunggu persetujuan admin.',
-                'action_url' => route('admin.returns.show', $ret->id),
-                'timestamp' => $ret->created_at,
-                'priority' => 'critical'
-            ];
+            $feed[] = $this->buildPriorityActionItem(
+                id: $ret->id,
+                type: 'return_submitted',
+                title: 'Pengajuan Retur: ' . $ret->return_number,
+                message: 'Menunggu persetujuan admin.',
+                actionUrl: route('admin.returns.show', $ret->id),
+                timestamp: $ret->created_at,
+                priority: 'critical',
+                categoryWeight: 1,
+                breachThresholdHours: 24, // selaras return_submitted_overdue (getSLABreaches)
+            );
         }
 
         // 3. Retur yang butuh inspeksi
@@ -90,26 +115,149 @@ class AnalyticsDashboardService
             ->orderBy('return_received_at', 'asc')
             ->limit(5)
             ->get();
-            
+
         foreach ($returnsToInspect as $ret) {
-            $feed[] = [
-                'id' => $ret->id,
-                'type' => 'return_received',
-                'title' => 'Inspeksi Retur: ' . $ret->return_number,
-                'message' => 'Barang retur sudah tiba di gudang dan butuh inspeksi.',
-                'action_url' => route('admin.returns.show', $ret->id),
-                'timestamp' => $ret->return_received_at,
-                'priority' => 'critical'
+            $feed[] = $this->buildPriorityActionItem(
+                id: $ret->id,
+                type: 'return_received',
+                title: 'Inspeksi Retur: ' . $ret->return_number,
+                message: 'Barang retur sudah tiba di gudang dan butuh inspeksi.',
+                actionUrl: route('admin.returns.show', $ret->id),
+                timestamp: $ret->return_received_at,
+                priority: 'critical',
+                categoryWeight: 3,
+                breachThresholdHours: 48, // selaras return_received_overdue (getSLABreaches)
+            );
+        }
+
+        // Urutkan berdasarkan priority_score DESC (severity dominan, lalu category_weight, lalu age)
+        usort($feed, function($a, $b) {
+            return $b['priority_score'] <=> $a['priority_score'];
+        });
+
+        return $feed;
+    }
+
+    /**
+     * Today Focus Summary roll-up (§2.7) — "hari ini saya harus kerjakan apa?"
+     *
+     * Sumber data (TANPA backend baru, §2.7): roll-up dari $feed (priority_score §2.5,
+     * full sebelum slice 10), `sla_breaches` (sudah dihitung getSLABreaches()), dan
+     * `low_stock_count` (sudah dihitung countLowStockProducts()) — semua sudah jadi
+     * bagian getOperationalMetrics(), tidak ada query baru.
+     *
+     * Integritas (§2.7-C): order_paid_overdue & return_*_overdue dari sla_breaches
+     * memakai threshold YANG SAMA dengan severity='critical' di buildPriorityActionItem()
+     * (#49: 24j/24j/48j) — sehingga count di sini selaras dengan item severity=critical
+     * pada $feed yang dipakai Priority Feed untuk drill-down.
+     *
+     * §2.7-B: 'is_all_clear' = true HANYA jika TIDAK ADA item critical/warning sama
+     * sekali (order_paid, return SLA, stok, maupun item 'warning' lain di $feed) —
+     * inilah SSOT success-state, PriorityFeed tidak boleh menduplikasi klaim "aman".
+     */
+    private function getTodayFocusSummary(array $feed, array $slaBreaches, int $lowStockCount): array
+    {
+        $returnSlaOverdue = $slaBreaches['return_submitted_overdue'] + $slaBreaches['return_received_overdue'];
+        $approachingCount = count(array_filter($feed, fn ($item) => $item['severity'] === 'warning'));
+
+        $items = [];
+
+        if ($slaBreaches['order_paid_overdue'] > 0) {
+            $items[] = [
+                'key' => 'order_paid_overdue',
+                'severity' => 'critical',
+                'count' => $slaBreaches['order_paid_overdue'],
+                'label' => $slaBreaches['order_paid_overdue'] . ' Order terlambat diproses',
+                'filter_types' => ['order_paid'],
+                'filter_severity' => 'critical',
             ];
         }
 
-        // Urutkan berdasarkan waktu paling lama (paling mendesak)
-        usort($feed, function($a, $b) {
-            return $a['timestamp'] <=> $b['timestamp'];
-        });
+        if ($returnSlaOverdue > 0) {
+            $items[] = [
+                'key' => 'return_sla_overdue',
+                'severity' => 'critical',
+                'count' => $returnSlaOverdue,
+                'label' => $returnSlaOverdue . ' Retur melewati SLA',
+                'filter_types' => ['return_submitted', 'return_received'],
+                'filter_severity' => 'critical',
+            ];
+        }
 
-        // Ambil 10 teratas
-        return array_slice($feed, 0, 10);
+        if ($lowStockCount > 0) {
+            // Threshold ">4 = critical" mencerminkan stockAlertTier (PrioritySummary.vue),
+            // bukan ambang baru — lihat tracker #51.
+            $items[] = [
+                'key' => 'low_stock',
+                'severity' => $lowStockCount > 4 ? 'critical' : 'warning',
+                'count' => $lowStockCount,
+                'label' => $lowStockCount . ' Produk stok kritis',
+                'filter_types' => null,
+                'filter_severity' => null,
+            ];
+        }
+
+        if ($approachingCount > 0) {
+            $items[] = [
+                'key' => 'approaching_sla',
+                'severity' => 'warning',
+                'count' => $approachingCount,
+                'label' => $approachingCount . ' item mendekati batas SLA',
+                'filter_types' => ['order_paid', 'return_submitted', 'return_received'],
+                'filter_severity' => 'warning',
+            ];
+        }
+
+        return [
+            'items' => $items,
+            'is_all_clear' => empty($items),
+        ];
+    }
+
+    /**
+     * Bangun satu item Priority Actions Feed dengan severity & priority_score (§2.5/#46).
+     *
+     * - severity_tier: critical(3) jika age >= threshold (selaras getSLABreaches),
+     *   warning(2) jika age >= 75% threshold, info(1) selainnya.
+     * - category_weight: tiebreaker antar item severity sama, urutan dari
+     *   implementation_plan.md Komponen 3 (return_received > order_paid > return_submitted).
+     * - age (jam, dibatasi 999) adalah tiebreaker terakhir.
+     */
+    private function buildPriorityActionItem(
+        int $id,
+        string $type,
+        string $title,
+        string $message,
+        string $actionUrl,
+        $timestamp,
+        string $priority,
+        int $categoryWeight,
+        int $breachThresholdHours,
+    ): array {
+        $ageHours = $timestamp ? (int) round(now()->diffInHours($timestamp, true)) : 0;
+
+        if ($ageHours >= $breachThresholdHours) {
+            $severity = 'critical';
+            $severityTier = 3;
+        } elseif ($ageHours >= $breachThresholdHours * 0.75) {
+            $severity = 'warning';
+            $severityTier = 2;
+        } else {
+            $severity = 'info';
+            $severityTier = 1;
+        }
+
+        return [
+            'id' => $id,
+            'type' => $type,
+            'title' => $title,
+            'message' => $message,
+            'action_url' => $actionUrl,
+            'timestamp' => $timestamp,
+            'priority' => $priority,
+            'severity' => $severity,
+            'priority_score' => ($severityTier * 1_000_000) + ($categoryWeight * 1_000) + min($ageHours, 999),
+        ];
     }
 
     /**
@@ -272,7 +420,7 @@ class AnalyticsDashboardService
 
         $cacheKey = "dashboard_financial_metrics_{$period}_{$comparePeriod}_{$startDate}_{$endDate}_{$chartGrouping}_{$topProductsLimit}";
 
-        return Cache::remember($cacheKey, 60 * 60, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate, $period, $chartGrouping, $topProductsLimit) {
+        return Cache::remember($cacheKey, 60 * 60, function () use ($startDate, $endDate, $prevStartDate, $prevEndDate, $period, $comparePeriod, $chartGrouping, $topProductsLimit) {
             $currentGross = $this->calculateGrossSales($startDate, $endDate);
             $prevGross = $this->calculateGrossSales($prevStartDate, $prevEndDate);
             
@@ -299,26 +447,28 @@ class AnalyticsDashboardService
             return [
                 'period_start'     => $startDate,
                 'period_end'       => $endDate,
+                // §1a / KPI Context: label periode pembanding, dirender di sebelah delta tren.
+                'comparison_label' => $this->resolveComparisonLabel($period, $comparePeriod, $prevStartDate, $prevEndDate),
                 'gross_sales'      => $currentGross,
-                'gross_sales_trend'=> $this->calculateTrend($currentGross, $prevGross),
+                'gross_sales_trend'=> $this->calculateTrend($currentGross, $prevGross, 'currency'),
                 'total_refund'     => $currentRefund,
-                'total_refund_trend'=> $this->calculateTrend($currentRefund, $prevRefund),
+                'total_refund_trend'=> $this->calculateTrend($currentRefund, $prevRefund, 'currency'),
                 'total_orders'     => $currentOrders,
-                'total_orders_trend'=> $this->calculateTrend($currentOrders, $prevOrders),
-                
+                'total_orders_trend'=> $this->calculateTrend($currentOrders, $prevOrders, 'count'),
+
                 'checkout_created' => $currentCheckoutCreated,
-                'checkout_created_trend' => $this->calculateTrend($currentCheckoutCreated, $prevCheckoutCreated),
-                
+                'checkout_created_trend' => $this->calculateTrend($currentCheckoutCreated, $prevCheckoutCreated, 'count'),
+
                 'paid_orders'      => $currentPaidOrders,
-                
+
                 'checkout_to_paid_rate' => $currentCheckoutToPaidRate,
-                'checkout_to_paid_rate_trend' => $this->calculateTrend($currentCheckoutToPaidRate, $prevCheckoutToPaidRate),
-                
+                'checkout_to_paid_rate_trend' => $this->calculateTrend($currentCheckoutToPaidRate, $prevCheckoutToPaidRate, 'rate'),
+
                 'top_products'     => $this->getTopProducts($startDate, $endDate, $topProductsLimit),
-                
+
                 'order_return_rate'=> $currentOrderReturnRate,
-                'order_return_rate_trend' => $this->calculateTrend($currentOrderReturnRate, $prevOrderReturnRate),
-                
+                'order_return_rate_trend' => $this->calculateTrend($currentOrderReturnRate, $prevOrderReturnRate, 'rate'),
+
                 'repeat_customer_rate' => $this->calculateRepeatCustomerRate(),
 
                 'payment_summary'  => $this->getPaymentSummary($startDate, $endDate),
@@ -378,9 +528,9 @@ class AnalyticsDashboardService
 
         return [
             'avg_shipping_cost' => $current['avg_shipping_cost'],
-            'avg_shipping_cost_trend' => $this->calculateTrend($current['avg_shipping_cost'], $previous['avg_shipping_cost']),
+            'avg_shipping_cost_trend' => $this->calculateTrend($current['avg_shipping_cost'], $previous['avg_shipping_cost'], 'currency'),
             'avg_delivery_days' => $current['avg_delivery_days'],
-            'avg_delivery_days_trend' => $this->calculateTrend($current['avg_delivery_days'], $previous['avg_delivery_days']),
+            'avg_delivery_days_trend' => $this->calculateTrend($current['avg_delivery_days'], $previous['avg_delivery_days'], 'count'),
         ];
     }
 
@@ -799,13 +949,103 @@ class AnalyticsDashboardService
     }
 
     /**
-     * Calculate percentage trend
+     * §1a / tracker #45 (DESIGN-LOCKED): structured KPI trend display.
+     *
+     * Bucket A ('currency'/'count'):
+     *   prev==0 && cur==0 -> {type: 'none', display: '—'}
+     *   prev==0 && cur>0  -> {type: 'new', display: 'Baru'}
+     *   prev>0: pct = (cur-prev)/prev*100; |pct|>200 -> signed raw delta formatted per
+     *           unit (e.g. '+33', '+Rp 4.450.000'), else -> 'pct%'.
+     *
+     * Bucket B ('rate' — checkout_to_paid_rate, order_return_rate): always a signed
+     * delta in percentage points (e.g. '+8 pp'), never a ratio-of-ratio.
+     *
+     * Pure display — current/previous values themselves are unchanged (financial-safe).
      */
-    protected function calculateTrend(float $current, float $previous): float
+    protected function calculateTrend(float $current, float $previous, string $bucket = 'count'): array
     {
-        if ($previous == 0) {
-            return $current > 0 ? 100 : 0;
+        if ($bucket === 'rate') {
+            $delta = round($current - $previous, 1);
+            $sign = $delta >= 0 ? '+' : '-';
+
+            return [
+                'type' => 'delta_points',
+                'value' => $delta,
+                'display' => $sign . $this->formatTrendNumber(abs($delta)) . ' pp',
+            ];
         }
-        return round((($current - $previous) / $previous) * 100, 1);
+
+        if ($previous == 0.0 && $current == 0.0) {
+            return ['type' => 'none', 'value' => null, 'display' => '—'];
+        }
+
+        if ($previous == 0.0 && $current > 0) {
+            return ['type' => 'new', 'value' => null, 'display' => 'Baru'];
+        }
+
+        $pct = round((($current - $previous) / $previous) * 100, 1);
+
+        if (abs($pct) > 200) {
+            $delta = $current - $previous;
+            $sign = $delta >= 0 ? '+' : '-';
+            $formatted = number_format(abs($delta), 0, ',', '.');
+
+            return [
+                'type' => 'delta',
+                'value' => $delta,
+                'display' => $sign . ($bucket === 'currency' ? "Rp {$formatted}" : $formatted),
+            ];
+        }
+
+        $sign = $pct >= 0 ? '+' : '-';
+
+        return [
+            'type' => 'percent',
+            'value' => $pct,
+            'display' => $sign . $this->formatTrendNumber(abs($pct)) . '%',
+        ];
+    }
+
+    /**
+     * Format a trend magnitude without a redundant ".0" (e.g. 33.0 -> "33", 8.5 -> "8,5").
+     */
+    protected function formatTrendNumber(float $value, int $maxDecimals = 1): string
+    {
+        $rounded = round($value, $maxDecimals);
+
+        if ($rounded == floor($rounded)) {
+            return number_format($rounded, 0, ',', '.');
+        }
+
+        return number_format($rounded, $maxDecimals, ',', '.');
+    }
+
+    /**
+     * KPI Context (§1a, digabung ke C2): label periode pembanding untuk ditampilkan
+     * di sebelah delta tren, mis. "vs 7 hari sebelumnya".
+     */
+    public function resolveComparisonLabel(string $period, string $comparePeriod, string $prevStartDate, string $prevEndDate): string
+    {
+        if ($comparePeriod === 'previous_year') {
+            return 'vs tahun lalu';
+        }
+
+        if (str_contains($period, '|')) {
+            $start = \Carbon\Carbon::parse($prevStartDate)->format('d M');
+            $end = \Carbon\Carbon::parse($prevEndDate)->format('d M');
+
+            return "vs periode sebelumnya ({$start} - {$end})";
+        }
+
+        return match ($period) {
+            'today'     => 'vs kemarin',
+            'yesterday' => 'vs 2 hari lalu',
+            '7days'     => 'vs 7 hari sebelumnya',
+            '30days'    => 'vs 30 hari sebelumnya',
+            'week'      => 'vs minggu lalu',
+            'month'     => 'vs bulan lalu',
+            'year'      => 'vs tahun lalu',
+            default     => 'vs periode sebelumnya',
+        };
     }
 }

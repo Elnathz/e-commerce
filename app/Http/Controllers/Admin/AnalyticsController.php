@@ -41,17 +41,21 @@ class AnalyticsController extends Controller
         } else {
             [$prevPeriodStart, $prevPeriodEnd] = $this->analyticsService->resolvePreviousPeriod($period, $comparePeriod);
 
+            // §1a / #45: shape harus konsisten dengan AnalyticsDashboardService::calculateTrend().
+            $noTrend = ['type' => 'none', 'value' => null, 'display' => '—'];
+
             $financial = [
                 'period_start' => $periodStart,
                 'period_end' => $periodEnd,
+                'comparison_label' => $this->analyticsService->resolveComparisonLabel($period, $comparePeriod, $prevPeriodStart, $prevPeriodEnd),
                 'gross_sales' => 0,
-                'gross_sales_trend' => 0,
+                'gross_sales_trend' => $noTrend,
                 'total_refund' => 0,
-                'total_refund_trend' => 0,
+                'total_refund_trend' => $noTrend,
                 'checkout_to_paid_rate' => 0,
-                'checkout_to_paid_rate_trend' => 0,
+                'checkout_to_paid_rate_trend' => $noTrend,
                 'order_return_rate' => 0,
-                'order_return_rate_trend' => 0,
+                'order_return_rate_trend' => $noTrend,
                 'repeat_customer_rate' => 0,
 
                 // Non-financial metrics that should still be visible

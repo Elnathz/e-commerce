@@ -15,6 +15,8 @@ class OrderController extends Controller
     public function index(Request $request)
     {
         $status = $request->query('status', 'all');
+        $dateFrom = $request->query('date_from');
+        $dateTo = $request->query('date_to');
 
         $query = Order::with('user')->latest();
 
@@ -22,11 +24,21 @@ class OrderController extends Controller
             $query->where('status', $status);
         }
 
+        // P1.1: KPI deep-links — scope the list to the dashboard period via created_at.
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
         $orders = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Admin/Orders/Index', [
             'orders' => $orders,
-            'currentStatus' => $status
+            'currentStatus' => $status,
+            'filters' => $request->only(['status', 'date_from', 'date_to']),
         ]);
     }
 

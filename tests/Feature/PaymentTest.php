@@ -323,6 +323,41 @@ class PaymentTest extends TestCase
 
         $this->variant->refresh();
         $this->assertEquals(0, $this->variant->reserved_stock);
+        $this->assertEquals(105, $this->variant->stock); // 100 + 5 released back
+    }
+
+    /**
+     * Regression test: order item whose variant was hard-deleted (FK nullOnDelete
+     * sets product_variant_id to null) must not crash the command — stock release
+     * for that item is simply skipped.
+     */
+    public function test_cancel_expired_command_with_deleted_variant(): void
+    {
+        OrderItem::create([
+            'order_id' => $this->order->id,
+            'product_variant_id' => null,
+            'product_name_snapshot' => 'Deleted Product',
+            'variant_name_snapshot' => 'Deleted Variant',
+            'quantity' => 2,
+            'unit_price' => 30000,
+            'weight_gram' => 200,
+            'subtotal' => 60000,
+        ]);
+
+        $this->order->update([
+            'expired_at' => now()->subHour(),
+        ]);
+
+        Artisan::call('orders:cancel-expired');
+
+        $this->order->refresh();
+        $this->assertEquals('cancelled', $this->order->status);
+        $this->assertEquals('failed', $this->order->payment_status);
+
+        // Existing item with a valid variant is still released normally
+        $this->variant->refresh();
+        $this->assertEquals(0, $this->variant->reserved_stock);
+        $this->assertEquals(105, $this->variant->stock);
     }
 
     /**

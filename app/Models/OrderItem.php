@@ -25,4 +25,51 @@ class OrderItem extends Model
     {
         return $this->hasOne(Review::class);
     }
+
+    public function returnRequestItems()
+    {
+        return $this->hasMany(ReturnRequestItem::class);
+    }
+
+    /**
+     * Item is blocked from review while its return is in an active
+     * (in-progress) state: submitted/approved/received/inspected.
+     * Once resolved (rejected/refund_processed/completed) or never
+     * returned, this is false and the item is reviewable.
+     */
+    public function hasActiveReturn(): bool
+    {
+        return ReturnRequestItem::where('order_item_id', $this->id)
+            ->whereHas('returnRequest', function ($query) {
+                $query->whereIn('status', ['submitted', 'approved', 'received', 'inspected']);
+            })
+            ->exists();
+    }
+
+    /**
+     * §1c / #44: review return-badge. Resolves the most recently updated
+     * "resolved" return outcome (rejected/refund_processed/completed) for
+     * this item — `cancelled` and still-active returns never produce a
+     * badge. Requires `returnRequestItems.returnRequest` to be eager-loaded
+     * (no additional queries are run here).
+     *
+     * @return array{outcome: 'refunded'|'requested', return_request_id: int}|null
+     */
+    public function reviewReturnBadge(): ?array
+    {
+        $resolved = $this->returnRequestItems
+            ->map(fn (ReturnRequestItem $item) => $item->returnRequest)
+            ->filter(fn (?ReturnRequest $returnRequest) => $returnRequest && in_array($returnRequest->status, ['rejected', 'refund_processed', 'completed'], true))
+            ->sortByDesc(fn (ReturnRequest $returnRequest) => $returnRequest->updated_at)
+            ->first();
+
+        if (!$resolved) {
+            return null;
+        }
+
+        return [
+            'outcome' => $resolved->status === 'rejected' ? 'requested' : 'refunded',
+            'return_request_id' => $resolved->id,
+        ];
+    }
 }

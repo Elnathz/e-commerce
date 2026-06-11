@@ -11,7 +11,7 @@ class ReviewController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Review::with(['user', 'product', 'images', 'orderItem.order'])->orderBy('rating', 'asc')->orderBy('created_at', 'desc');
+        $query = Review::with(['user', 'product', 'images', 'orderItem.order', 'orderItem.returnRequestItems.returnRequest'])->orderBy('rating', 'asc')->orderBy('created_at', 'desc');
 
         // Stats & Health Summary
         $distribution = Review::selectRaw('rating, count(*) as count')
@@ -60,6 +60,14 @@ class ReviewController extends Controller
         }
 
         $reviews = $query->paginate(10)->withQueryString();
+
+        // §1c / #44: review return-badge — admin sees the differentiated
+        // "Retur Ditolak" / "Sudah Direfund" + a link to the return detail.
+        $reviews->getCollection()->each(function (Review $review) {
+            $badge = $review->orderItem?->reviewReturnBadge();
+            $review->return_badge = $badge['outcome'] ?? null;
+            $review->return_request_id = $badge['return_request_id'] ?? null;
+        });
 
         return Inertia::render('Admin/Reviews/Index', [
             'reviews' => $reviews,

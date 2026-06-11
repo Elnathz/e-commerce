@@ -20,11 +20,20 @@ class ReturnController extends Controller
             $query->where('status', $request->status);
         }
 
+        // P1.1: KPI deep-links — scope the list to the dashboard period via created_at.
+        if ($request->filled('date_from')) {
+            $query->whereDate('created_at', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('created_at', '<=', $request->date_to);
+        }
+
         $returns = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Admin/Returns/Index', [
             'returns' => $returns,
-            'filters' => $request->only(['status']),
+            'filters' => $request->only(['status', 'date_from', 'date_to']),
         ]);
     }
 
