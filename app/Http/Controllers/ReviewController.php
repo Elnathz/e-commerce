@@ -24,10 +24,6 @@ class ReviewController extends Controller
             return back()->with('error', 'Hanya pesanan yang sudah selesai yang dapat diberi ulasan.');
         }
 
-        if ($order->returnRequest && $order->returnRequest->status !== 'rejected') {
-            return back()->with('error', 'Pesanan yang diretur atau direfund tidak dapat diberi ulasan.');
-        }
-
         $request->validate([
             'order_item_id' => 'required|exists:order_items,id',
             'rating' => 'required|integer|min:1|max:5',
@@ -39,6 +35,17 @@ class ReviewController extends Controller
         $orderItem = OrderItem::where('id', $request->order_item_id)
             ->where('order_id', $order->id)
             ->firstOrFail();
+
+        // Cek eligibility item terhadap retur
+        $activeReturnItem = \App\Models\ReturnRequestItem::where('order_item_id', $orderItem->id)
+            ->whereHas('returnRequest', function ($query) {
+                $query->whereIn('status', ['submitted', 'approved', 'received', 'inspected']);
+            })
+            ->exists();
+            
+        if ($activeReturnItem) {
+            return back()->with('error', 'Produk ini sedang dalam proses retur dan belum dapat diberi ulasan.');
+        }
 
         if ($orderItem->review()->exists()) {
             return back()->with('error', 'Anda sudah memberikan ulasan untuk produk ini.');

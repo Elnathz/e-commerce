@@ -39,6 +39,8 @@ class AnalyticsController extends Controller
             // Hanya owner yang boleh menarik data finansial (simulasi pemisahan service)
             $financial = $this->analyticsService->getFinancialMetrics($period, $comparePeriod, $chartGrouping, $topProductsLimit);
         } else {
+            [$prevPeriodStart, $prevPeriodEnd] = $this->analyticsService->resolvePreviousPeriod($period, $comparePeriod);
+
             $financial = [
                 'period_start' => $periodStart,
                 'period_end' => $periodEnd,
@@ -54,7 +56,7 @@ class AnalyticsController extends Controller
 
                 // Non-financial metrics that should still be visible
                 'payment_summary' => $this->analyticsService->getPaymentSummary($periodStart, $periodEnd),
-                'logistics_performance' => $this->analyticsService->getLogisticsPerformance($periodStart, $periodEnd),
+                'logistics_performance' => $this->analyticsService->getLogisticsPerformance($periodStart, $periodEnd, $prevPeriodStart, $prevPeriodEnd),
                 'sales_chart' => $this->analyticsService->getSalesChartData($periodStart, $periodEnd, $period, $chartGrouping),
             ];
             

@@ -12,6 +12,25 @@ class MigrationHelpers
      */
     public static function backfillOrderPaidAt(): void
     {
+        if (DB::getDriverName() === 'sqlite') {
+            $orders = DB::table('orders')
+                ->whereIn('status', ['paid','processing','shipped','completed','refunded'])
+                ->whereNull('paid_at')
+                ->get();
+            
+            foreach ($orders as $order) {
+                $paidAt = DB::table('payments')
+                    ->where('order_id', $order->id)
+                    ->where('status', 'paid')
+                    ->max('paid_at');
+                
+                if ($paidAt) {
+                    DB::table('orders')->where('id', $order->id)->update(['paid_at' => $paidAt]);
+                }
+            }
+            return;
+        }
+
         DB::statement("
             UPDATE orders o
             INNER JOIN (

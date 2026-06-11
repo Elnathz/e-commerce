@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Order;
 use App\Models\ReturnRequest;
 use App\Models\ProductVariant;
+use App\Models\Promotion;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
@@ -33,9 +34,11 @@ class AnalyticsDashboardService
             'awaiting_approval'   => ReturnRequest::where('status', 'submitted')->count(),
             'awaiting_inspection' => ReturnRequest::where('status', 'received')->count(),
             'sla_breaches'        => $this->getSLABreaches(),
-            'financial_exposure'  => $this->getFinancialExposure(),
-            'pending_shipment'    => $this->getPendingShipmentStats(),
+            'revenue_at_risk'     => $this->getRevenueAtRisk(),
+            'pending_shipment'    => $this->getPendingShipmentValue(),
+            'oldest_order'        => $this->getOldestUnprocessedOrder(),
             'priority_actions'    => $this->getPriorityActionsFeed(),
+            'vouchers_alert'      => $this->getVouchersNeedingAttention(),
         ];
     }
 
@@ -114,46 +117,149 @@ class AnalyticsDashboardService
      */
     public function getSLABreaches(): array
     {
-        $uninspectedReturns = \App\Models\ReturnRequest::where('status', 'received')
-            ->where('return_received_at', '<', now()->subHours(24))
+        $orderPaidOverdue = Order::where('status', 'paid')
+            ->whereNotNull('paid_at')
+            ->where('paid_at', '<', now()->subHours(24))
             ->count();
 
-        $unrefundedReturns = \App\Models\ReturnRequest::where('status', 'inspected')
-            ->where('inspection_result', 'passed')
-            ->where('inspected_at', '<', now()->subHours(24))
+        $orderProcessingOverdue = Order::where('status', 'processing')
+            ->whereNotNull('processing_at')
+            ->where('processing_at', '<', now()->subHours(48))
+            ->count();
+
+        $returnSubmittedOverdue = ReturnRequest::where('status', 'submitted')
+            ->where('created_at', '<', now()->subHours(24))
+            ->count();
+
+        $returnReceivedOverdue = ReturnRequest::where('status', 'received')
+            ->whereNotNull('return_received_at')
+            ->where('return_received_at', '<', now()->subHours(48))
+            ->count();
+
+        $returnRefundOverdue = ReturnRequest::where('status', 'inspected')
+            ->whereNotNull('inspected_at')
+            ->where('inspected_at', '<', now()->subHours(72))
+            ->whereNull('refund_processed_at')
             ->count();
 
         return [
-            'uninspected_returns' => $uninspectedReturns,
-            'unrefunded_returns' => $unrefundedReturns,
-            'total_breaches' => $uninspectedReturns + $unrefundedReturns,
+            'order_paid_overdue' => $orderPaidOverdue,
+            'order_processing_overdue' => $orderProcessingOverdue,
+            'return_submitted_overdue' => $returnSubmittedOverdue,
+            'return_received_overdue' => $returnReceivedOverdue,
+            'return_refund_overdue' => $returnRefundOverdue,
+            'total_breaches' => $orderPaidOverdue + $orderProcessingOverdue + $returnSubmittedOverdue + $returnReceivedOverdue + $returnRefundOverdue,
         ];
     }
 
     /**
-     * Get Financial Exposure (Revenue at risk)
+     * Get Revenue At Risk (3 komponen terpisah)
      */
-    public function getFinancialExposure(): float
+    public function getRevenueAtRisk(): array
     {
-        return (float) DB::table('promotion_usages')
+        $pendingPayment = Order::where('status', 'pending')
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as total, COUNT(*) as count')
+            ->first();
+
+        $pendingRefund = DB::table('return_requests as rr')
+            ->join('return_request_items as rri', 'rri.return_request_id', '=', 'rr.id')
+            ->whereIn('rr.status', ['approved', 'received', 'inspected'])
+            ->whereNull('rr.refund_processed_at')
+            ->selectRaw('COALESCE(SUM(rri.refund_amount), 0) as total')
+            ->value('total');
+
+        $reservedVoucher = DB::table('promotion_usages')
             ->where('status', 'reserved')
-            ->sum('discount_applied');
+            ->selectRaw('COALESCE(SUM(discount_applied), 0) as total')
+            ->value('total');
+
+        return [
+            'pending_payment_amount'  => (float) $pendingPayment->total,
+            'pending_payment_count'   => (int)   $pendingPayment->count,
+            'pending_refund_amount'   => (float) $pendingRefund,
+            'reserved_voucher_amount' => (float) $reservedVoucher,
+        ];
     }
 
     /**
-     * Get Pending Shipment Stats
+     * Get Pending Shipment Value
      */
-    public function getPendingShipmentStats(): array
+    public function getPendingShipmentValue(): array
     {
-        $stats = Order::where('status', 'processing')
-            ->selectRaw('COUNT(*) as total_orders, SUM(total_amount) as total_value, MIN(COALESCE(paid_at, created_at)) as oldest_order_at')
+        $result = Order::where('status', 'processing')
+            ->selectRaw('COALESCE(SUM(total_amount), 0) as total_value, COUNT(*) as order_count')
             ->first();
 
         return [
-            'count' => $stats->total_orders ?? 0,
-            'value' => $stats->total_value ?? 0,
-            'oldest_at' => $stats->oldest_order_at,
+            'total_value'  => (float) $result->total_value,
+            'order_count'  => (int)   $result->order_count,
         ];
+    }
+
+    /**
+     * Get Oldest Unprocessed Order
+     */
+    public function getOldestUnprocessedOrder(): ?array
+    {
+        $baseQuery = Order::where('status', 'paid');
+        $totalWaiting = $baseQuery->count();
+
+        if ($totalWaiting === 0) return null;
+
+        $order = $baseQuery->whereNotNull('paid_at')
+            ->orderBy('paid_at', 'asc')
+            ->with('user:id,name')
+            ->select(['id', 'order_number', 'paid_at', 'total_amount', 'user_id'])
+            ->first();
+
+        if (!$order) return null;
+
+        return [
+            'id'            => $order->id,
+            'order_number'  => $order->order_number,
+            'total_amount'  => $order->total_amount,
+            'paid_at'       => $order->paid_at,
+            'waiting_hours' => round(now()->diffInMinutes($order->paid_at) / 60, 1),
+            'customer_name' => $order->user->name ?? 'Unknown',
+            'total_waiting' => $totalWaiting,
+        ];
+    }
+
+    /**
+     * Get Vouchers Needing Attention
+     */
+    public function getVouchersNeedingAttention(): array
+    {
+        return Promotion::where('is_active', true)
+            ->whereNotNull('max_usage')
+            ->where('max_usage', '>', 0)
+            ->get()
+            ->map(function ($promo) {
+                $remaining = max(0, $promo->max_usage - $promo->used_count);
+                $pct = ($remaining / $promo->max_usage) * 100;
+
+                // 2-tier: critical = sisa absolut <= 5, warning = sisa pct <= 10%
+                if ($remaining <= 5) {
+                    $severity = 'critical';
+                } elseif ($pct <= 10.0) {
+                    $severity = 'warning';
+                } else {
+                    return null;
+                }
+
+                return [
+                    'id'        => $promo->id,
+                    'name'      => $promo->name,
+                    'code'      => $promo->code,
+                    'remaining' => $remaining,
+                    'pct_used'  => round(100 - $pct, 1),
+                    'severity'  => $severity,
+                ];
+            })
+            ->filter()
+            ->sortBy(fn($v) => $v['severity'] === 'critical' ? 0 : 1)
+            ->values()
+            ->toArray();
     }
 
     /**
@@ -216,7 +322,7 @@ class AnalyticsDashboardService
                 'repeat_customer_rate' => $this->calculateRepeatCustomerRate(),
 
                 'payment_summary'  => $this->getPaymentSummary($startDate, $endDate),
-                'logistics_performance' => $this->getLogisticsPerformance($startDate, $endDate),
+                'logistics_performance' => $this->getLogisticsPerformance($startDate, $endDate, $prevStartDate, $prevEndDate),
                 'sales_chart'      => $this->getSalesChartData($startDate, $endDate, $period, $chartGrouping),
             ];
         });
@@ -262,7 +368,26 @@ class AnalyticsDashboardService
     /**
      * Get Logistics Performance
      */
-    public function getLogisticsPerformance(string $startDate, string $endDate): array
+    public function getLogisticsPerformance(string $startDate, string $endDate, ?string $prevStartDate = null, ?string $prevEndDate = null): array
+    {
+        $current = $this->calculateLogisticsStats($startDate, $endDate);
+
+        $previous = ($prevStartDate && $prevEndDate)
+            ? $this->calculateLogisticsStats($prevStartDate, $prevEndDate)
+            : ['avg_shipping_cost' => 0, 'avg_delivery_days' => 0];
+
+        return [
+            'avg_shipping_cost' => $current['avg_shipping_cost'],
+            'avg_shipping_cost_trend' => $this->calculateTrend($current['avg_shipping_cost'], $previous['avg_shipping_cost']),
+            'avg_delivery_days' => $current['avg_delivery_days'],
+            'avg_delivery_days_trend' => $this->calculateTrend($current['avg_delivery_days'], $previous['avg_delivery_days']),
+        ];
+    }
+
+    /**
+     * Calculate average shipping cost & delivery days for a date range
+     */
+    protected function calculateLogisticsStats(string $startDate, string $endDate): array
     {
         $shippedOrders = Order::whereNotNull('shipped_at')
             ->whereNotNull('delivered_at')
@@ -273,35 +398,15 @@ class AnalyticsDashboardService
 
         $totalOrders = $shippedOrders->count();
         $totalShippingCost = $shippedOrders->sum('shipping_cost');
-        
-        $avgDeliveryDays = 0;
-        $onTimeCount = 0;
 
+        $totalDeliveryDays = 0;
         foreach ($shippedOrders as $order) {
-            $days = $order->shipped_at->diffInDays($order->delivered_at);
-            $avgDeliveryDays += $days;
-            // Anggap SLA tepat waktu adalah <= 3 hari
-            if ($days <= 3) {
-                $onTimeCount++;
-            }
+            $totalDeliveryDays += $order->shipped_at->diffInDays($order->delivered_at);
         }
 
-        $avgDeliveryDays = $totalOrders > 0 ? round($avgDeliveryDays / $totalOrders, 1) : 0;
-        $avgShippingCost = $totalOrders > 0 ? round($totalShippingCost / $totalOrders, 0) : 0;
-        $onTimeRate = $totalOrders > 0 ? round(($onTimeCount / $totalOrders) * 100, 1) : 0;
-
-        // Simplified previous period for trend
-        [$prevStart, $prevEnd] = $this->resolvePreviousPeriod('month');
-        // Pseudo logic for trend, using basic 0 for now since this is getting complex
-        // Ideally we'd fetch previous data too. We'll return 0 trend for now or just the value.
-
         return [
-            'avg_shipping_cost' => $avgShippingCost,
-            'avg_shipping_cost_trend' => 0,
-            'avg_delivery_days' => $avgDeliveryDays,
-            'avg_delivery_days_trend' => 0,
-            'on_time_rate' => $onTimeRate,
-            'on_time_rate_trend' => 0,
+            'avg_shipping_cost' => $totalOrders > 0 ? round($totalShippingCost / $totalOrders, 0) : 0,
+            'avg_delivery_days' => $totalOrders > 0 ? round($totalDeliveryDays / $totalOrders, 1) : 0,
         ];
     }
 
@@ -498,10 +603,10 @@ class AnalyticsDashboardService
             ->count();
     }
 
-    /** Top 10 products by quantity sold */
+    /** Top 10 products by quantity sold, with current stock availability badge */
     public function getTopProducts(string $startDate, string $endDate, int $limit = 10): array
     {
-        return DB::table('order_items as oi')
+        $topProducts = DB::table('order_items as oi')
             ->join('product_variants as pv', 'pv.id', '=', 'oi.product_variant_id')
             ->join('products as p', 'p.id', '=', 'pv.product_id')
             ->join('orders as o', 'o.id', '=', 'oi.order_id')
@@ -517,8 +622,34 @@ class AnalyticsDashboardService
             ->groupBy('p.id', 'p.name')
             ->orderByDesc('total_sold')
             ->limit($limit)
-            ->get()
-            ->toArray();
+            ->get();
+
+        if ($topProducts->isEmpty()) {
+            return [];
+        }
+
+        $stockByProduct = DB::table('product_variants')
+            ->whereIn('product_id', $topProducts->pluck('id'))
+            ->where('is_active', true)
+            ->groupBy('product_id')
+            ->select('product_id', DB::raw('MIN(stock - reserved_stock) as available_stock'))
+            ->pluck('available_stock', 'product_id');
+
+        return $topProducts->map(function ($product) use ($stockByProduct) {
+            $availableStock = (int) ($stockByProduct[$product->id] ?? 0);
+            $product->available_stock = $availableStock;
+            $product->stock_status = $this->resolveStockStatus($availableStock);
+            return (array) $product;
+        })->toArray();
+    }
+
+    /** Resolve stock badge tier based on the configured low-stock threshold */
+    protected function resolveStockStatus(int $availableStock): string
+    {
+        if ($availableStock <= 0) return 'habis';
+        if ($availableStock <= $this->lowStockThreshold) return 'kritis';
+        if ($availableStock <= $this->lowStockThreshold * 2) return 'perhatian';
+        return 'aman';
     }
 
     /**

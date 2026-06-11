@@ -27,3 +27,7 @@ extracted_pdf_text.txt
 tdd_changes_tracker.md
 prompt.md
 .agents/
+CLAUDE.md
+implementation_plan.md
+.claude
+.planning
