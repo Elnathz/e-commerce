@@ -38,7 +38,7 @@ const isAllClear = computed(() => props.metrics.today_focus?.is_all_clear ?? tru
         <div class="bg-white/10 backdrop-blur-md divide-y divide-white/10 p-2 relative z-10">
             <div v-for="item in items" :key="item.key" class="flex justify-between items-center py-3 px-4 hover:bg-white/5 rounded-xl transition-colors">
                 <div class="flex items-center gap-3">
-                    <span :aria-label="item.severity">{{ item.severity === 'critical' ? '🔴' : '🟡' }}</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" :aria-label="item.severity" :class="item.severity === 'critical' ? 'text-rose-300' : 'text-amber-300'" class="w-3 h-3 shrink-0"><circle cx="12" cy="12" r="10" /></svg>
                     <span class="font-medium text-sm">{{ item.label }}</span>
                 </div>
 

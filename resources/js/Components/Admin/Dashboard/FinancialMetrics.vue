@@ -38,12 +38,20 @@ const getTrendColor = (trend, invert = false) => {
     return 'text-slate-500 bg-slate-50/80 border-slate-100';
 };
 
-const getTrendIcon = (trend) => {
-    if (!trend || trend.type === 'none') return '→';
-    if (trend.type === 'new') return '↗';
-    if (trend.value > 0) return '↗';
-    if (trend.value < 0) return '↘';
-    return '→';
+// SVG path data untuk indikator arah trend (heroicons-style). Menggantikan
+// glyph unicode (→/↗/↘) agar konsisten dengan ikon SVG lain di dashboard.
+const TREND_ICON_PATHS = {
+    up: 'M2.25 18L9 11.25l4.306 4.306a11.95 11.95 0 015.814-5.518l2.74-1.22m0 0l-5.94-2.281m5.94 2.28l-2.28 5.941',
+    down: 'M2.25 6L9 12.75l4.306-4.306a11.95 11.95 0 015.814 5.518l2.74 1.22m0 0l-5.94 2.28m5.94-2.28l-2.28-5.941',
+    flat: 'M5 12h14',
+};
+
+const getTrendIconPath = (trend) => {
+    if (!trend || trend.type === 'none') return TREND_ICON_PATHS.flat;
+    if (trend.type === 'new') return TREND_ICON_PATHS.up;
+    if (trend.value > 0) return TREND_ICON_PATHS.up;
+    if (trend.value < 0) return TREND_ICON_PATHS.down;
+    return TREND_ICON_PATHS.flat;
 };
 
 const getTrendDisplay = (trend) => trend?.display ?? '—';
@@ -134,7 +142,7 @@ const getTrendDisplay = (trend) => trend?.display ?? '—';
                     <div class="text-4xl font-black text-slate-900 tracking-tighter mb-4">{{ formatRupiah(metrics.gross_sales || 0) }}</div>
                     <div class="flex items-center gap-3">
                         <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border" :class="getTrendColor(metrics.gross_sales_trend)">
-                            <span>{{ getTrendIcon(metrics.gross_sales_trend) }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.gross_sales_trend)" /></svg>
                             <span>{{ getTrendDisplay(metrics.gross_sales_trend) }}</span>
                         </div>
                         <span class="text-xs font-semibold text-slate-400">{{ metrics.comparison_label || 'vs periode lalu' }}</span>
@@ -151,7 +159,7 @@ const getTrendDisplay = (trend) => trend?.display ?? '—';
                     <div class="text-4xl font-black text-slate-900 tracking-tighter mb-4">{{ metrics.total_orders || 0 }} <span class="text-lg text-slate-400 font-bold">pesanan</span></div>
                     <div class="flex items-center gap-3">
                         <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border" :class="getTrendColor(metrics.total_orders_trend)">
-                            <span>{{ getTrendIcon(metrics.total_orders_trend) }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.total_orders_trend)" /></svg>
                             <span>{{ getTrendDisplay(metrics.total_orders_trend) }}</span>
                         </div>
                         <span class="text-xs font-semibold text-slate-400">{{ metrics.comparison_label || 'vs periode lalu' }}</span>
@@ -169,7 +177,7 @@ const getTrendDisplay = (trend) => trend?.display ?? '—';
                     <div class="flex items-center gap-3">
                         <!-- Note: Trend terbalik untuk refund. Turun = Bagus (Hijau) -->
                         <div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold border" :class="getTrendColor(metrics.total_refund_trend, true)">
-                            <span>{{ getTrendIcon(metrics.total_refund_trend) }}</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.total_refund_trend)" /></svg>
                             <span>{{ getTrendDisplay(metrics.total_refund_trend) }}</span>
                         </div>
                         <span class="text-xs font-semibold text-slate-400">{{ metrics.comparison_label || 'vs periode lalu' }}</span>
@@ -185,7 +193,10 @@ const getTrendDisplay = (trend) => trend?.display ?? '—';
                 <div class="text-xs font-extrabold text-slate-500 uppercase tracking-widest">Checkout Attempts</div>
                 <div class="flex items-center gap-3">
                     <div class="text-xl font-black text-slate-800">{{ metrics.checkout_created || 0 }}</div>
-                    <span class="text-xs font-bold px-2 py-0.5 rounded border" :class="getTrendColor(metrics.checkout_created_trend)">{{ getTrendIcon(metrics.checkout_created_trend) }} {{ getTrendDisplay(metrics.checkout_created_trend) }}</span>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1" :class="getTrendColor(metrics.checkout_created_trend)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.checkout_created_trend)" /></svg>
+                        {{ getTrendDisplay(metrics.checkout_created_trend) }}
+                    </span>
                     <Link :href="route('admin.orders.index', { date_from: metrics.period_start, date_to: metrics.period_end })" class="text-xs font-bold text-slate-400 hover:text-slate-700 hover:underline" title="Lihat semua order pada periode ini">→</Link>
                 </div>
             </div>
@@ -193,14 +204,20 @@ const getTrendDisplay = (trend) => trend?.display ?? '—';
                 <div class="text-xs font-extrabold text-slate-500 uppercase tracking-widest">Checkout-to-Paid</div>
                 <div class="flex items-center gap-3">
                     <div class="text-xl font-black text-slate-800">{{ metrics.checkout_to_paid_rate || 0 }}%</div>
-                    <span class="text-xs font-bold px-2 py-0.5 rounded border" :class="getTrendColor(metrics.checkout_to_paid_rate_trend)">{{ getTrendIcon(metrics.checkout_to_paid_rate_trend) }} {{ getTrendDisplay(metrics.checkout_to_paid_rate_trend) }}</span>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1" :class="getTrendColor(metrics.checkout_to_paid_rate_trend)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.checkout_to_paid_rate_trend)" /></svg>
+                        {{ getTrendDisplay(metrics.checkout_to_paid_rate_trend) }}
+                    </span>
                 </div>
             </div>
             <div class="bg-slate-100/50 border border-slate-200/60 rounded-2xl p-5 flex justify-between items-center hover:bg-white transition-colors hover:shadow-sm">
                 <div class="text-xs font-extrabold text-slate-500 uppercase tracking-widest">Return Rate</div>
                 <div class="flex items-center gap-3">
                     <div class="text-xl font-black text-slate-800">{{ metrics.order_return_rate || 0 }}%</div>
-                    <span class="text-xs font-bold px-2 py-0.5 rounded border" :class="getTrendColor(metrics.order_return_rate_trend, true)">{{ getTrendIcon(metrics.order_return_rate_trend) }} {{ getTrendDisplay(metrics.order_return_rate_trend) }}</span>
+                    <span class="text-xs font-bold px-2 py-0.5 rounded border inline-flex items-center gap-1" :class="getTrendColor(metrics.order_return_rate_trend, true)">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" :d="getTrendIconPath(metrics.order_return_rate_trend)" /></svg>
+                        {{ getTrendDisplay(metrics.order_return_rate_trend) }}
+                    </span>
                     <Link :href="route('admin.returns.index', { date_from: metrics.period_start, date_to: metrics.period_end })" class="text-xs font-bold text-slate-400 hover:text-slate-700 hover:underline" title="Lihat semua retur pada periode ini">→</Link>
                 </div>
             </div>

@@ -51,12 +51,14 @@ describe('TodayFocus.vue (§2.7 / §2.7-B / §2.7-C)', () => {
         expect(wrapper.text()).toContain('2 Order terlambat diproses');
         expect(wrapper.text()).toContain('3 Produk stok kritis');
 
-        // critical -> 🔴, warning -> 🟡
+        // critical -> rose dot icon, warning -> amber dot icon
         const severityIcons = wrapper.findAll('[aria-label]');
         expect(severityIcons[0].attributes('aria-label')).toBe('critical');
-        expect(severityIcons[0].text()).toBe('🔴');
+        expect(severityIcons[0].element.tagName).toBe('svg');
+        expect(severityIcons[0].classes()).toContain('text-rose-300');
         expect(severityIcons[1].attributes('aria-label')).toBe('warning');
-        expect(severityIcons[1].text()).toBe('🟡');
+        expect(severityIcons[1].element.tagName).toBe('svg');
+        expect(severityIcons[1].classes()).toContain('text-amber-300');
 
         // Item with filter_types -> "Tangani Sekarang" button emitting drill-down
         const button = wrapper.find('button');
