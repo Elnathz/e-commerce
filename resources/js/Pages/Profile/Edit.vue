@@ -1,5 +1,6 @@
 <script setup>
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
+import AddressManagement from './Partials/AddressManagement.vue';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
@@ -11,6 +12,10 @@ defineProps({
     },
     status: {
         type: String,
+    },
+    addresses: {
+        type: Array,
+        default: () => [],
     },
 });
 </script>
@@ -33,6 +38,10 @@ defineProps({
                         :status="status"
                         class="max-w-xl"
                     />
+                </div>
+
+                <div class="bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:rounded-2xl sm:p-10">
+                    <AddressManagement :addresses="addresses" />
                 </div>
 
                 <div class="bg-white p-6 shadow-sm ring-1 ring-slate-200 sm:rounded-2xl sm:p-10">
