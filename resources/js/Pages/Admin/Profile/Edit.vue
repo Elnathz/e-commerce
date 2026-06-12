@@ -3,6 +3,7 @@ import AdminLayout from '@/Layouts/AdminLayout.vue';
 import DeleteUserForm from '@/Pages/Profile/Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from '@/Pages/Profile/Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from '@/Pages/Profile/Partials/UpdateProfileInformationForm.vue';
+import RecentActivity from './Partials/RecentActivity.vue';
 import { Head } from '@inertiajs/vue3';
 
 defineProps({
@@ -11,6 +12,10 @@ defineProps({
     },
     status: {
         type: String,
+    },
+    recentActivity: {
+        type: Array,
+        default: () => [],
     },
 });
 </script>
@@ -30,6 +35,10 @@ defineProps({
                     :status="status"
                     class="max-w-xl"
                 />
+            </div>
+
+            <div class="bg-white p-6 shadow-sm rounded-xl border border-slate-200">
+                <RecentActivity :activities="recentActivity" />
             </div>
 
             <div class="bg-white p-6 shadow-sm rounded-xl border border-slate-200">
