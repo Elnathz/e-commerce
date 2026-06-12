@@ -126,7 +126,7 @@ const severityTreatment = (severity) => {
     </div>
 
     <!-- Needs Action Feed -->
-    <section class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200">
+    <section class="bg-white/80 backdrop-blur-xl p-6 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-200 mt-6">
         <div class="flex items-center justify-between mb-6">
             <h3 class="text-sm font-extrabold text-slate-800 uppercase tracking-widest flex items-center gap-2">
                 <span class="w-2 h-6 bg-indigo-500 rounded-full"></span>

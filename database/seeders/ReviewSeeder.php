@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use App\Models\Order;
+use App\Models\Product;
 use App\Models\Review;
 use Carbon\Carbon;
 
@@ -66,6 +67,23 @@ class ReviewSeeder extends Seeder
 
                 $scenarioIndex++;
             }
+        }
+
+        // DatabaseSeeder runs under WithoutModelEvents, so ReviewObserver
+        // never fires for the Review::create() calls above — recompute the
+        // denormalized product rating stats it would normally maintain.
+        $productIds = Review::where('is_published', true)->distinct()->pluck('product_id');
+
+        foreach ($productIds as $productId) {
+            $stats = Review::where('product_id', $productId)
+                ->where('is_published', true)
+                ->selectRaw('COUNT(*) as count, AVG(rating) as average')
+                ->first();
+
+            Product::where('id', $productId)->update([
+                'review_count' => $stats->count ?? 0,
+                'average_rating' => round($stats->average ?? 0, 2),
+            ]);
         }
     }
 }

@@ -367,7 +367,7 @@ class AnalyticsDashboardService
             'order_number'  => $order->order_number,
             'total_amount'  => $order->total_amount,
             'paid_at'       => $order->paid_at,
-            'waiting_hours' => round(now()->diffInMinutes($order->paid_at) / 60, 1),
+            'waiting_hours' => round(now()->diffInMinutes($order->paid_at, true) / 60, 1),
             'customer_name' => $order->user->name ?? 'Unknown',
             'total_waiting' => $totalWaiting,
         ];
