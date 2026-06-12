@@ -9,6 +9,7 @@ use App\Services\AnalyticsDashboardService;
 use App\Jobs\ExportOrdersJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class AnalyticsController extends Controller
@@ -124,7 +125,9 @@ class AnalyticsController extends Controller
             ->take(20)
             ->get();
 
-        return response()->json($jobs);
+        return Inertia::render('Admin/Exports/Index', [
+            'jobs' => $jobs,
+        ]);
     }
 
     public function startExport(Request $request)
