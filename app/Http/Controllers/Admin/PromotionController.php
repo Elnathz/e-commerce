@@ -10,14 +10,50 @@ use Illuminate\Support\Str;
 
 class PromotionController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        $promotions = Promotion::withCount(['usages' => function ($query) {
-            $query->whereIn('status', ['reserved', 'confirmed']);
-        }])->latest()->paginate(20);
+        $query = Promotion::withCount(['usages' => function ($q) {
+            $q->whereIn('status', ['reserved', 'confirmed']);
+        }])->latest();
+
+        if ($request->filled('q')) {
+            $search = $request->q;
+            $query->where(function ($q) use ($search) {
+                $q->where('code', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('is_active', $request->status === 'active');
+        }
+
+        if ($request->filled('type')) {
+            $query->where('type', $request->type);
+        }
+
+        $promotions = $query->paginate(20)->withQueryString();
+
+        $stats = [
+            'total' => Promotion::count(),
+            'active' => Promotion::where('is_active', true)->count(),
+            'expiring_soon' => Promotion::where('is_active', true)
+                ->whereNotNull('valid_until')
+                ->whereBetween('valid_until', [now(), now()->addDays(7)])
+                ->count(),
+            'exhausted' => Promotion::whereNotNull('max_usage')
+                ->whereColumn('used_count', '>=', 'max_usage')
+                ->count(),
+        ];
 
         return Inertia::render('Admin/Promotions/Index', [
             'promotions' => $promotions,
+            'stats' => $stats,
+            'filters' => [
+                'q' => $request->q,
+                'status' => $request->status,
+                'type' => $request->type,
+            ],
         ]);
     }
 
