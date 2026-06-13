@@ -29,11 +29,25 @@ class ReturnController extends Controller
             $query->whereDate('created_at', '<=', $request->date_to);
         }
 
+        if ($request->filled('q')) {
+            $term = $request->q;
+            $query->where(function ($sub) use ($term) {
+                $sub->where('return_number', 'like', "%{$term}%")
+                    ->orWhereHas('order', fn ($o) => $o->where('order_number', 'like', "%{$term}%"))
+                    ->orWhereHas('user', fn ($u) => $u->where('name', 'like', "%{$term}%"));
+            });
+        }
+
         $returns = $query->paginate(20)->withQueryString();
 
         return Inertia::render('Admin/Returns/Index', [
             'returns' => $returns,
-            'filters' => $request->only(['status', 'date_from', 'date_to']),
+            'filters' => $request->only(['status', 'date_from', 'date_to', 'q']),
+            'stats' => [
+                'awaiting_refund' => ReturnRequest::where('status', 'inspected')->count(),
+                'awaiting_inspection' => ReturnRequest::where('status', 'received')->count(),
+                'awaiting_approval' => ReturnRequest::where('status', 'submitted')->count(),
+            ],
         ]);
     }
 
