@@ -1,4 +1,6 @@
 <script setup>
+import { activityMeta } from '@/Utils/activityMeta';
+
 defineProps({
     activities: {
         type: Array,
@@ -15,30 +17,6 @@ const formatDate = (dateString) => {
         hour: '2-digit',
         minute: '2-digit',
     });
-};
-
-const typeMeta = (type) => {
-    if (type?.startsWith('order.')) {
-        if (type === 'order.cancelled') {
-            return { icon: 'cancel', class: 'bg-red-50 text-red-600' };
-        }
-        if (type === 'order.completed') {
-            return { icon: 'check', class: 'bg-emerald-50 text-emerald-600' };
-        }
-        return { icon: 'order', class: 'bg-blue-50 text-blue-600' };
-    }
-
-    if (type?.startsWith('return.')) {
-        if (type === 'return.rejected') {
-            return { icon: 'cancel', class: 'bg-red-50 text-red-600' };
-        }
-        if (type === 'return.refund_processed' || type === 'return.completed') {
-            return { icon: 'check', class: 'bg-emerald-50 text-emerald-600' };
-        }
-        return { icon: 'return', class: 'bg-amber-50 text-amber-600' };
-    }
-
-    return { icon: 'default', class: 'bg-slate-100 text-slate-500' };
 };
 </script>
 
@@ -63,17 +41,17 @@ const typeMeta = (type) => {
 
         <ul v-else class="mt-6 space-y-3">
             <li v-for="activity in activities" :key="activity.id" class="flex items-start gap-3 rounded-xl border border-slate-200 p-4">
-                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full" :class="typeMeta(activity.type).class">
-                    <svg v-if="typeMeta(activity.type).icon === 'order'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                <div class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full" :class="activityMeta(activity.type).class">
+                    <svg v-if="activityMeta(activity.type).icon === 'order'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.25 10.5h.008v.008H8.25V10.5zm7.5 0h.008v.008H15.75V10.5z" />
                     </svg>
-                    <svg v-else-if="typeMeta(activity.type).icon === 'return'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <svg v-else-if="activityMeta(activity.type).icon === 'return'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
                     </svg>
-                    <svg v-else-if="typeMeta(activity.type).icon === 'check'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <svg v-else-if="activityMeta(activity.type).icon === 'check'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75l2.25 2.25L15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
-                    <svg v-else-if="typeMeta(activity.type).icon === 'cancel'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                    <svg v-else-if="activityMeta(activity.type).icon === 'cancel'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">

@@ -73,6 +73,9 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::post('/exports', [\App\Http\Controllers\Admin\AnalyticsController::class, 'startExport'])->name('exports.start');
     Route::get('/exports/{job}/download', [\App\Http\Controllers\Admin\AnalyticsController::class, 'downloadExport'])->name('exports.download');
 
+    // Activity Log
+    Route::get('/activity-log', [\App\Http\Controllers\Admin\ActivityLogController::class, 'index'])->name('activity-log.index');
+
     Route::resource('categories', \App\Http\Controllers\Admin\CategoryController::class);
     Route::resource('products', \App\Http\Controllers\Admin\ProductController::class);
     
