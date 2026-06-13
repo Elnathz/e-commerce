@@ -12,12 +12,30 @@ use Illuminate\Support\Facades\Storage;
 
 class CategoryController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        // Ambil kategori utama beserta sub-kategorinya untuk hierarki visual
-        $categories = Category::with('children')->whereNull('parent_id')->orderBy('name', 'asc')->paginate(10);
+        $query = Category::query()->withCount(['products', 'children']);
+
+        if ($request->filled('q')) {
+            // Mode search: hasil FLAT (parent & child yang match), bukan hierarki.
+            $query->where('name', 'like', '%' . $request->q . '%')->orderBy('name');
+        } else {
+            // Mode hierarki existing.
+            $query->whereNull('parent_id')
+                ->with(['children' => fn ($c) => $c->withCount('products')])
+                ->orderBy('name');
+        }
+
+        $categories = $query->paginate(10)->withQueryString();
+
         return Inertia::render('Admin/Categories/Index', [
-            'categories' => $categories
+            'categories' => $categories,
+            'filters' => $request->only(['q']),
+            'stats' => [
+                'total' => Category::count(),
+                'active' => Category::where('is_active', true)->count(),
+                'subcategories' => Category::whereNotNull('parent_id')->count(),
+            ],
         ]);
     }
 
@@ -84,6 +102,13 @@ class CategoryController extends Controller
 
     public function destroy(Category $category)
     {
+        // GUARD (invariant data-loss; lapisan terakhir, non-rekursif): tolak bila punya produk
+        // langsung ATAU subkategori langsung. Cegah cascade FK menghapus produk diam-diam.
+        if ($category->products()->exists() || $category->children()->exists()) {
+            return back()->with('error',
+                'Tidak bisa menghapus "' . $category->name . '": masih ada produk atau subkategori. Pindahkan atau hapus dulu.');
+        }
+
         if ($category->image_path) {
             Storage::disk('public')->delete($category->image_path);
         }
