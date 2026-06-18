@@ -119,6 +119,12 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Admin Promotions
     Route::resource('promotions', \App\Http\Controllers\Admin\PromotionController::class);
     Route::get('promotions/{promotion}/history', [\App\Http\Controllers\Admin\PromotionController::class, 'history'])->name('promotions.history');
+
+    // Hero Slides & Site Settings
+    Route::resource('hero-slides', \App\Http\Controllers\Admin\HeroSlideController::class)
+        ->except(['show']);
+    Route::get('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'edit'])->name('settings.edit');
+    Route::put('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update'])->name('settings.update');
 });
 
 // Payment API (public — no auth required)

@@ -4,21 +4,41 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Models\HeroSlide;
 use App\Models\Product;
 
 class StorefrontController extends Controller
 {
     public function index()
     {
-        $products = Product::with(['category', 'variants' => function($q) {
-            $q->where('is_active', true);
-        }, 'images' => function($q) {
-            $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
-        }])
-        ->where('is_active', true)
-        ->inRandomOrder()
-        ->take(12)
-        ->get();
+        $heroSlides = HeroSlide::where('is_active', true)
+            ->orderBy('sort_order')
+            ->get();
+
+        // Produk on-sale nyata: punya varian aktif dgn price < base_price (korelasi subquery).
+        $onSaleQuery = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
+            'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
+            ->where('is_active', true)
+            ->whereHas('variants', function ($q) {
+                $q->where('is_active', true)
+                  ->whereColumn('product_variants.price', '<', 'products.base_price');
+            });
+
+        $onSaleProducts = (clone $onSaleQuery)->take(8)->get();
+
+        // Fallback bila belum ada produk diskon: produk terbaru (biar section tidak kosong total).
+        if ($onSaleProducts->isEmpty()) {
+            $onSaleProducts = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
+                'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
+                ->where('is_active', true)->latest()->take(8)->get();
+        }
+
+        $products = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
+            'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
+            ->where('is_active', true)
+            ->inRandomOrder()
+            ->take(12)
+            ->get();
 
         $categories = \App\Models\Category::with('children')
             ->where('is_active', true)
@@ -27,8 +47,10 @@ class StorefrontController extends Controller
             ->get();
 
         return Inertia::render('Storefront/Index', [
+            'heroSlides' => $heroSlides,
+            'onSaleProducts' => $onSaleProducts,
             'products' => $products,
-            'categories' => $categories
+            'categories' => $categories,
         ]);
     }
 

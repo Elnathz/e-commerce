@@ -47,6 +47,14 @@ class HandleInertiaRequests extends Middleware
                 'cart_success' => fn () => $request->session()->get('cart_success'),
                 'cart_error' => fn () => $request->session()->get('cart_error'),
             ],
+            'announcement' => function () {
+                if (\App\Models\SiteSetting::get('announcement_active') !== '1') return null;
+                return [
+                    'text' => \App\Models\SiteSetting::get('announcement_text'),
+                    'link_url' => \App\Models\SiteSetting::get('announcement_link_url'),
+                    'link_label' => \App\Models\SiteSetting::get('announcement_link_label'),
+                ];
+            },
         ];
     }
 
