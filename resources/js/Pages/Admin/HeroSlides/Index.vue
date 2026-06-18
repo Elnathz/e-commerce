@@ -1,11 +1,15 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import { computed } from 'vue';
 
-defineProps({
+const props = defineProps({
     slides: { type: Array, default: () => [] },
     stats: { type: Object, default: () => ({ total: 0, active: 0 }) },
 });
+
+const heroMainSlides = computed(() => props.slides.filter(s => s.placement === 'hero_main'));
+const heroSideSlides = computed(() => props.slides.filter(s => s.placement === 'hero_side'));
 
 const slideImage = (path) => path.startsWith('images/') ? '/' + path : '/storage/' + path;
 
@@ -48,35 +52,74 @@ const destroy = (slide) => {
                         </Link>
                     </div>
 
-                    <div class="p-4 space-y-3">
-                        <div v-if="slides.length" class="space-y-3">
-                            <div v-for="slide in slides" :key="slide.id"
-                                 class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-4 hover:border-blue-300 transition-colors">
-                                <div class="w-32 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-100">
-                                    <img :src="slideImage(slide.image_path)" :alt="slide.title" class="w-full h-full object-cover" />
-                                </div>
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="font-semibold text-slate-800 truncate">{{ slide.title }}</span>
-                                        <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold" :class="slide.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">
-                                            {{ slide.is_active ? 'Aktif' : 'Nonaktif' }}
-                                        </span>
+                    <div class="p-4 space-y-6">
+                        <template v-if="slides.length">
+                            <div class="space-y-3">
+                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Hero Utama</h2>
+                                <div v-if="heroMainSlides.length" class="space-y-3">
+                                    <div v-for="slide in heroMainSlides" :key="slide.id"
+                                         class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-4 hover:border-blue-300 transition-colors">
+                                        <div class="w-32 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-100">
+                                            <img :src="slideImage(slide.image_path)" :alt="slide.title" class="w-full h-full object-cover" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-semibold text-slate-800 truncate">{{ slide.title }}</span>
+                                                <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold" :class="slide.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                                                    {{ slide.is_active ? 'Aktif' : 'Nonaktif' }}
+                                                </span>
+                                            </div>
+                                            <p class="text-sm text-slate-500 truncate mt-0.5">{{ slide.subtitle }}</p>
+                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; CTA: {{ slide.cta_label || '-' }}</p>
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <Link :href="route('admin.hero-slides.edit', slide.id)"
+                                                  class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
+                                                Edit
+                                            </Link>
+                                            <button @click="destroy(slide)"
+                                                    class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm cursor-pointer">
+                                                Hapus
+                                            </button>
+                                        </div>
                                     </div>
-                                    <p class="text-sm text-slate-500 truncate mt-0.5">{{ slide.subtitle }}</p>
-                                    <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; CTA: {{ slide.cta_label || '-' }}</p>
                                 </div>
-                                <div class="flex items-center gap-2 shrink-0">
-                                    <Link :href="route('admin.hero-slides.edit', slide.id)"
-                                          class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
-                                        Edit
-                                    </Link>
-                                    <button @click="destroy(slide)"
-                                            class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm cursor-pointer">
-                                        Hapus
-                                    </button>
-                                </div>
+                                <p v-else class="text-sm text-slate-400">Belum ada slide Hero Utama.</p>
                             </div>
-                        </div>
+
+                            <div class="space-y-3">
+                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Banner Samping</h2>
+                                <div v-if="heroSideSlides.length" class="space-y-3">
+                                    <div v-for="slide in heroSideSlides" :key="slide.id"
+                                         class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-4 hover:border-blue-300 transition-colors">
+                                        <div class="w-32 h-16 shrink-0 rounded-lg overflow-hidden bg-slate-100">
+                                            <img :src="slideImage(slide.image_path)" :alt="slide.title" class="w-full h-full object-cover" />
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-semibold text-slate-800 truncate">{{ slide.title }}</span>
+                                                <span class="text-[11px] px-2 py-0.5 rounded-full font-semibold" :class="slide.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'">
+                                                    {{ slide.is_active ? 'Aktif' : 'Nonaktif' }}
+                                                </span>
+                                            </div>
+                                            <p class="text-sm text-slate-500 truncate mt-0.5">{{ slide.subtitle }}</p>
+                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; CTA: {{ slide.cta_label || '-' }}</p>
+                                        </div>
+                                        <div class="flex items-center gap-2 shrink-0">
+                                            <Link :href="route('admin.hero-slides.edit', slide.id)"
+                                                  class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
+                                                Edit
+                                            </Link>
+                                            <button @click="destroy(slide)"
+                                                    class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm cursor-pointer">
+                                                Hapus
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-else class="text-sm text-slate-400">Belum ada slide Banner Samping.</p>
+                            </div>
+                        </template>
                         <div v-else class="rounded-2xl border border-dashed border-slate-300 p-12 text-center text-slate-500">
                             Belum ada slide. Klik "Tambah Slide" untuk membuat banner pertama.
                         </div>

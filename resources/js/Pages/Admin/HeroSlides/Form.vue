@@ -12,6 +12,7 @@ const preview = ref(props.slide?.image_path
 
 const form = useForm({
     _method: isEdit ? 'put' : 'post',
+    placement: props.slide?.placement ?? 'hero_main',
     title: props.slide?.title ?? '',
     subtitle: props.slide?.subtitle ?? '',
     badge_label: props.slide?.badge_label ?? '',
@@ -45,6 +46,18 @@ const submit = () => {
 
             <form @submit.prevent="submit" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
                 <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Posisi Banner <span class="text-red-500">*</span></label>
+                    <select v-model="form.placement" class="w-full rounded-lg border-slate-300 text-sm">
+                        <option value="hero_main">Hero Utama (carousel tengah)</option>
+                        <option value="hero_side">Banner Samping</option>
+                    </select>
+                    <p class="text-xs text-slate-400 mt-1">
+                        {{ form.placement === 'hero_main' ? 'Rekomendasi gambar 1280×640px (rasio 2:1).' : 'Rekomendasi gambar 640×300px (rasio ~2:1). Maks 4 banner samping tampil.' }}
+                    </p>
+                    <p v-if="form.errors.placement" class="text-xs text-red-600 mt-1">{{ form.errors.placement }}</p>
+                </div>
+
+                <div>
                     <label class="block text-sm font-medium text-slate-700 mb-1">Gambar <span class="text-red-500">*</span></label>
                     <div v-if="preview" class="mb-2 rounded-xl overflow-hidden border border-slate-200 aspect-[1200/440] bg-slate-100">
                         <img :src="preview" alt="preview" class="w-full h-full object-cover" />
@@ -55,7 +68,7 @@ const submit = () => {
                 </div>
 
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Judul <span class="text-red-500">*</span></label>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Judul / Alt text <span class="text-red-500">*</span></label>
                     <input v-model="form.title" type="text" class="w-full rounded-lg border-slate-300 text-sm" />
                     <p v-if="form.errors.title" class="text-xs text-red-600 mt-1">{{ form.errors.title }}</p>
                 </div>
