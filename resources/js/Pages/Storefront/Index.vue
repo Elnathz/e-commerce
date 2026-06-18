@@ -4,7 +4,6 @@ import ProductCard from '@/Components/Storefront/ProductCard.vue';
 import PromoProductCard from '@/Components/Storefront/PromoProductCard.vue';
 import HeroCarousel from '@/Components/Storefront/HeroCarousel.vue';
 import { Head, Link } from '@inertiajs/vue3';
-import AddressFormModal from '@/Components/Profile/AddressFormModal.vue';
 
 defineProps({
     heroSlides: { type: Array, default: () => [] },
