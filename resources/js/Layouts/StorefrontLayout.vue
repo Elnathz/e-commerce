@@ -5,6 +5,7 @@ import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
 import CartDrawer from '@/Components/Storefront/CartDrawer.vue';
 import ShoppingMethodDrawer from '@/Components/Storefront/ShoppingMethodDrawer.vue';
+import CategoryMegaMenu from '@/Components/Storefront/CategoryMegaMenu.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 
 const showingMobileMenu = ref(false);
@@ -81,22 +82,32 @@ watch(() => page.props.flash?.cart_error, (msg) => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-white text-gray-900 font-sans">
+    <div class="min-h-screen bg-white text-gray-900 font-body">
         
-        <!-- Top Bar (Light Gray) -->
-        <div class="bg-gray-100 text-gray-500 text-xs py-2 hidden md:block">
+        <!-- Top Bar: announcement dinamis (bila aktif) atau fallback jujur -->
+        <div class="text-xs py-2 hidden md:block"
+             :class="page.props.announcement ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-                <div>Welcome to MegaMart - Best Deals Online!</div>
-                <div class="flex items-center gap-4">
-                    <span class="flex items-center gap-1">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
-                        Deliver to: <strong>Jakarta Pusat</strong>
-                    </span>
-                    <span class="flex items-center gap-1">
+                <!-- Announcement aktif -->
+                <template v-if="page.props.announcement">
+                    <div class="flex items-center gap-2 font-medium">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-4 h-4"><path d="M5.25 9a6.75 6.75 0 0 1 13.5 0v.75c0 2.123.8 4.057 2.118 5.52a.75.75 0 0 1-.297 1.206c-1.544.57-3.16.99-4.831 1.243a3.75 3.75 0 1 1-7.48 0 24.585 24.585 0 0 1-4.831-1.244.75.75 0 0 1-.298-1.205A8.217 8.217 0 0 0 5.25 9.75V9Z" /></svg>
+                        {{ page.props.announcement.text }}
+                    </div>
+                    <Link v-if="page.props.announcement.link_url"
+                          :href="page.props.announcement.link_url"
+                          class="font-semibold underline underline-offset-2 hover:opacity-80 transition-opacity duration-150">
+                        {{ page.props.announcement.link_label || 'Selengkapnya' }}
+                    </Link>
+                </template>
+                <!-- Fallback jujur -->
+                <template v-else>
+                    <div>Selamat datang di MegaMart &mdash; belanja hemat tiap hari!</div>
+                    <Link :href="route('orders.index')" class="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-4 h-4"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.09-1.124a17.902 17.902 0 0 0-3.213-9.193 2.056 2.056 0 0 0-1.58-.86H14.25M16.5 18.75h-2.25m0-11.177v-.958c0-.568-.422-1.048-.987-1.106a48.554 48.554 0 0 0-10.026 0 1.106 1.106 0 0 0-.987 1.106v7.635m12-6.677v6.677m0 4.5v-4.5m0 0h-12" /></svg>
-                        Track your order
-                    </span>
-                </div>
+                        Lacak Pesanan
+                    </Link>
+                </template>
             </div>
         </div>
 
@@ -108,12 +119,17 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                     <!-- Left: Logo -->
                     <div class="flex items-center shrink-0">
                         <!-- Hamburger for mobile -->
-                        <button @click="showingMobileMenu = !showingMobileMenu" class="md:hidden mr-2 text-blue-600">
+                        <button @click="showingMobileMenu = !showingMobileMenu" class="md:hidden mr-2 text-blue-600 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-6 h-6"><path stroke-linecap="round" stroke-linejoin="round" d="M3 12h18M3 6h18M3 18h18" /></svg>
                         </button>
                         <Link href="/" class="flex items-center gap-2">
                             <img src="/images/logo/gemini-svg.svg?v=4" alt="MegaMart" class="w-40 h-auto object-contain" />
                         </Link>
+                    </div>
+
+                    <!-- Kategori mega-menu (desktop) -->
+                    <div class="hidden md:block shrink-0 ml-2">
+                        <CategoryMegaMenu />
                     </div>
 
                     <!-- Center: Search Bar -->
@@ -123,7 +139,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                             </span>
                             <input v-model="searchQuery" type="text" placeholder="Search essentials, groceries and more..." class="w-full border-0 bg-transparent py-2.5 px-3 focus:ring-0 text-sm text-gray-700 placeholder-gray-400" />
-                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm font-semibold transition-colors">
+                            <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 text-sm font-semibold transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                                 Search
                             </button>
                         </form>
@@ -137,7 +153,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>
                             <span v-if="cartCount > 0" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{{ cartCount > 9 ? '9+' : cartCount }}</span>
                         </Link>
-                        <button @click="showCartDrawer = true" class="hidden md:flex relative items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors">
+                        <button @click="showCartDrawer = true" class="hidden md:flex relative items-center gap-1.5 text-sm font-semibold text-gray-700 hover:text-blue-600 transition-colors duration-200 cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1">
                             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" /></svg>
                             <span>Cart</span>
                             <span v-if="cartCount > 0" class="absolute -top-1.5 -right-2.5 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full">{{ cartCount > 9 ? '9+' : cartCount }}</span>
@@ -200,30 +216,6 @@ watch(() => page.props.flash?.cart_error, (msg) => {
             </div>
         </nav>
 
-        <!-- Sub Navbar (Categories) -->
-        <div class="bg-white border-b border-gray-100 hidden md:block">
-            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-                <div class="flex flex-wrap items-center gap-4 py-3">
-                    
-                    <!-- Dynamic Categories -->
-                    <div v-for="parent in page.props.globalCategories" :key="parent.id" class="relative group">
-                        <!-- Parent Category Button (Trigger) -->
-                        <button class="flex items-center gap-1 bg-[#F3F9FB] text-gray-700 px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                            {{ parent.name }}
-                            <svg v-if="parent.children && parent.children.length > 0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" /></svg>
-                        </button>
-                        
-                        <!-- Dropdown Children -->
-                        <div v-if="parent.children && parent.children.length > 0" class="absolute top-full left-0 mt-1 w-48 bg-white border border-gray-100 rounded-xl shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 overflow-hidden py-1">
-                            <Link v-for="child in parent.children" :key="child.id" :href="`/search?categories[]=${child.id}`" class="block px-4 py-2 text-sm text-gray-700 hover:bg-[#F3F9FB] hover:text-blue-600 transition-colors">
-                                {{ child.name }}
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
         <!-- Mobile Menu (Toggleable) -->
         <div v-if="showingMobileMenu" class="md:hidden bg-white border-b border-gray-200 px-4 py-2 max-h-[70vh] overflow-y-auto shadow-inner">
             <template v-for="parent in page.props.globalCategories" :key="parent.id">
@@ -252,9 +244,9 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                         <h2 class="text-2xl font-bold mb-6">MegaMart</h2>
                         <div class="space-y-4 text-sm text-blue-100">
                             <p class="flex flex-col">
-                                <span class="font-semibold text-white">Contact Us</span>
-                                <span>WhatsApp: +1 202-918-2132</span>
-                                <span>Call Us: +1 202-918-2132</span>
+                                <span class="font-semibold text-white">Hubungi Kami</span>
+                                <span>WhatsApp: (segera hadir)</span>
+                                <span>Email: support@megamart.test</span>
                             </p>
                             <div class="pt-4">
                                 <p class="font-semibold text-white mb-2">Download App</p>
@@ -267,7 +259,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                                         </div>
                                     </div>
                                     <div class="bg-black rounded px-3 py-1 flex items-center gap-2 cursor-pointer border border-gray-800">
-                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-green-500"><path d="M3 20.5v-17c0-.83.67-1.5 1.5-1.5h15c.83 0 1.5.67 1.5 1.5v17c0 .83-.67 1.5-1.5 1.5h-15C3.67 22 3 21.33 3 20.5z" opacity="0"/><path d="M17.5 14.5l-5-2.5-5 2.5V5h10v9.5zM7.5 3h9C17.33 3 18 3.67 18 4.5v15c0 .83-.67 1.5-1.5 1.5h-9C6.67 21 6 20.33 6 19.5v-15C6 3.67 6.67 3 7.5 3zm2.5 5.5l2-1.5 2 1.5v-3h-4v3z"/></svg>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 text-white"><path d="M3.6 2.3c-.3.2-.5.6-.5 1.1v17.2c0 .5.2.9.5 1.1l9.2-9.7L3.6 2.3zm10.3 8.4l2.5-2.6-9.8-5.6 7.3 8.2zm0 2.6l-7.3 8.2 9.8-5.6-2.5-2.6zm5.6-3.4l-2.2-1.3-2.7 2.8 2.7 2.8 2.2-1.3c.8-.5.8-1.7 0-2.2z"/></svg>
                                         <div class="flex flex-col">
                                             <span class="text-[8px] text-gray-300 leading-none">GET IT ON</span>
                                             <span class="text-xs font-bold leading-tight">Google Play</span>
@@ -279,16 +271,13 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                     </div>
 
                     <div>
-                        <h3 class="font-bold border-b border-blue-400 pb-2 mb-4">Most Popular Categories</h3>
+                        <h3 class="font-bold border-b border-blue-400 pb-2 mb-4">Kategori Populer</h3>
                         <ul class="space-y-2 text-sm text-blue-100">
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Staples</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Beverages</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Personal Care</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Home Care</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Baby Care</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Vegetables & Fruits</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Snacks & Foods</a></li>
-                            <li><a href="#" class="hover:text-white transition-colors">&bull; Dairy & Bakery</a></li>
+                            <li v-for="parent in (page.props.globalCategories || []).slice(0, 8)" :key="parent.id">
+                                <Link :href="`/search?categories[]=${parent.id}`" class="hover:text-white transition-colors duration-150">
+                                    &bull; {{ parent.name }}
+                                </Link>
+                            </li>
                         </ul>
                     </div>
 
@@ -306,7 +295,7 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                 </div>
 
                 <div class="border-t border-blue-400 pt-6 text-center text-xs text-blue-200">
-                    <p>&copy; 2026 All rights reserved. Reliance Retail Ltd.</p>
+                    <p>&copy; {{ new Date().getFullYear() }} MegaMart. All rights reserved.</p>
                 </div>
             </div>
         </footer>
