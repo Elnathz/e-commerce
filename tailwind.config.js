@@ -14,6 +14,8 @@ export default {
         extend: {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                heading: ['Rubik', ...defaultTheme.fontFamily.sans],
+                body: ['"Nunito Sans"', ...defaultTheme.fontFamily.sans],
             },
         },
     },

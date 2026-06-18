@@ -1,132 +1,115 @@
 <script setup>
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import ProductCard from '@/Components/Storefront/ProductCard.vue';
+import PromoProductCard from '@/Components/Storefront/PromoProductCard.vue';
+import HeroCarousel from '@/Components/Storefront/HeroCarousel.vue';
+import TrustStrip from '@/Components/Storefront/TrustStrip.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
-const props = defineProps({
-    products: Array,
-    categories: Array,
+defineProps({
+    heroSlides: { type: Array, default: () => [] },
+    onSaleProducts: { type: Array, default: () => [] },
+    products: { type: Array, default: () => [] },
+    categories: { type: Array, default: () => [] },
 });
 
-// Format currency (used locally for Smartphones mock section)
-const formatPrice = (price) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
-};
-
+const categoryImage = (path) => '/storage/' + path;
 </script>
 
 <template>
     <Head title="Home - MegaMart" />
-
     <StorefrontLayout>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
-            
-            <!-- Hero Banner -->
-            <div class="w-full rounded-2xl overflow-hidden relative group">
-                <!-- Gunakan banner asli yang telah disediakan -->
-                <img src="/images/banner/banner.png" alt="Smart Wearable" class="w-full object-cover rounded-2xl shadow-sm" />
-                <!-- Nav Arrows (Decorative) -->
-                <button class="absolute left-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-blue-600 rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" /></svg>
-                </button>
-                <button class="absolute right-4 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-blue-600 rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-md">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" /></svg>
-                </button>
-            </div>
-            
-            <!-- Top Electronics Brands -->
-            <section>
-                <div class="flex justify-between items-end border-b pb-2 mb-6">
-                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
-                        Top <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Electronics Brands</span>
-                    </h2>
-                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
-                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </Link>
+
+            <!-- HERO BLOCK: carousel (kiri) + grid promo 2x2 (kanan) -->
+            <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div class="lg:col-span-2">
+                    <HeroCarousel v-if="heroSlides.length" :slides="heroSlides" />
                 </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <!-- Brand 1 (Mock Apple) -->
-                    <div class="bg-gray-900 text-white rounded-2xl p-6 flex items-center justify-between shadow-sm relative overflow-hidden group">
-                        <div class="z-10 relative">
-                            <div class="bg-white/20 text-white text-xs font-semibold px-3 py-1 rounded-full w-fit mb-3">IPHONE</div>
-                            <img src="/images/logo/gemini-svg.svg" class="h-10 mb-2 brightness-0 invert opacity-80" alt="Logo" />
-                            <div class="text-lg font-light">UP to 80% OFF</div>
-                        </div>
-                        <img src="/images/product/ipon17promaxwhite.webp" class="h-28 z-10 drop-shadow-2xl group-hover:scale-110 transition-transform duration-300" alt="iPhone" />
-                    </div>
-
-                    <!-- Brand 2 (Mock Realme) -->
-                    <div class="bg-[#FFF8E1] text-black rounded-2xl p-6 flex items-center justify-between shadow-sm relative overflow-hidden group">
-                        <div class="z-10 relative">
-                            <div class="bg-yellow-400 text-black text-xs font-bold px-3 py-1 rounded-full w-fit mb-3">realme</div>
-                            <div class="text-2xl font-black text-yellow-500 mb-1">realme</div>
-                            <div class="text-lg font-light">UP to 60% OFF</div>
-                        </div>
-                        <img src="/images/product/ipon17black.webp" class="h-28 z-10 drop-shadow-2xl group-hover:scale-110 transition-transform duration-300" alt="Phone" />
-                    </div>
-
-                    <!-- Brand 3 (Mock Xiaomi) -->
-                    <div class="bg-[#FFF3E0] text-black rounded-2xl p-6 flex items-center justify-between shadow-sm relative overflow-hidden group">
-                        <div class="z-10 relative">
-                            <div class="bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full w-fit mb-3">XIAOMI</div>
-                            <div class="text-2xl font-black text-orange-500 mb-1">mi</div>
-                            <div class="text-lg font-light">UP to 80% OFF</div>
-                        </div>
-                        <img src="/images/product/ipon17promaxblue.webp" class="h-28 z-10 drop-shadow-2xl group-hover:scale-110 transition-transform duration-300" alt="Phone" />
-                    </div>
-                </div>
-            </section>
-
-            <!-- Shop From Top Categories -->
-            <section v-if="categories && categories.length > 0">
-                <div class="flex justify-between items-end border-b pb-2 mb-6">
-                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
-                        Shop From <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Top Categories</span>
-                    </h2>
-                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
-                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </Link>
-                </div>
-
-                <div class="space-y-6">
-                    <div v-for="parent in categories" :key="parent.id">
-                        <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">{{ parent.name }}</h3>
-                        <div class="flex flex-wrap gap-6 md:gap-8">
-                            <Link 
-                                v-for="child in parent.children" 
-                                :key="child.id"
-                                :href="`/search?categories[]=${child.id}`"
-                                class="flex flex-col items-center gap-2 w-[90px] md:w-auto"
-                            >
-                                <div class="w-24 h-24 md:w-28 md:h-28 rounded-full bg-[#F3F9FB] flex items-center justify-center overflow-hidden border-2 border-transparent hover:border-blue-500 hover:shadow-md transition-all duration-300 p-2 group">
-                                    <img v-if="child.image_path" :src="'/storage/' + child.image_path" :alt="child.name" class="w-3/4 h-3/4 object-contain drop-shadow-sm group-hover:scale-[3.2] transition-transform duration-300 scale-[2.9]" />
-                                    <span v-else class="text-gray-400 text-[10px] font-medium uppercase tracking-wide text-center leading-tight">{{ child.name }}</span>
-                                </div>
-                                <span class="text-xs font-semibold text-gray-700 text-center leading-tight">{{ child.name }}</span>
-                            </Link>
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Daily Essentials (Actual DB Products - Random) -->
-            <section v-if="products && products.length > 0">
-                <div class="flex justify-between items-end border-b pb-2 mb-6">
-                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800">
-                        Daily <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Essentials</span>
-                    </h2>
-                    <Link href="#" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1">
-                        View All <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
-                    </Link>
-                </div>
-
-                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    <ProductCard
-                        v-for="product in products"
+                <div v-if="onSaleProducts.length" class="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 content-start">
+                    <PromoProductCard
+                        v-for="product in onSaleProducts.slice(0, 4)"
                         :key="product.id"
                         :product="product"
                     />
+                </div>
+            </section>
+
+            <!-- TRUST STRIP -->
+            <TrustStrip />
+
+            <!-- KATEGORI (2 level: kartu parent ber-ikon + child sbg chip teks; image-independent) -->
+            <section v-if="categories.length">
+                <div class="flex justify-between items-end border-b pb-2 mb-6">
+                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800 font-heading">
+                        <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Kategori</span>
+                    </h2>
+                    <Link href="/search" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        View All
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </Link>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div v-for="parent in categories" :key="parent.id"
+                         class="bg-white border border-gray-100 rounded-2xl p-4 hover:shadow-md transition-shadow duration-200">
+                        <!-- Header parent: ikon (atau gambar bila ada) + nama -->
+                        <Link :href="`/search?categories[]=${parent.id}`"
+                              class="flex items-center gap-3 group mb-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1">
+                            <div class="w-11 h-11 rounded-xl bg-[#F3F9FB] flex items-center justify-center overflow-hidden shrink-0 group-hover:bg-blue-50 transition-colors duration-200">
+                                <img v-if="parent.image_path" :src="categoryImage(parent.image_path)" :alt="parent.name"
+                                     loading="lazy" class="w-full h-full object-contain p-1.5" />
+                                <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.6" stroke="currentColor" class="w-6 h-6 text-blue-600"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25A2.25 2.25 0 0 1 13.5 8.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" /></svg>
+                            </div>
+                            <span class="font-semibold text-gray-800 group-hover:text-blue-600 transition-colors duration-200 font-heading">{{ parent.name }}</span>
+                        </Link>
+                        <!-- Child sbg chip teks (2 level; cucu tidak ada/di-load) -->
+                        <div v-if="parent.children && parent.children.length" class="flex flex-wrap gap-2">
+                            <Link
+                                v-for="child in parent.children"
+                                :key="child.id"
+                                :href="`/search?categories[]=${child.id}`"
+                                class="inline-flex items-center gap-1.5 bg-[#F3F9FB] text-gray-600 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            >
+                                <img v-if="child.image_path" :src="categoryImage(child.image_path)" :alt="child.name"
+                                     loading="lazy" class="w-4 h-4 object-contain" />
+                                {{ child.name }}
+                            </Link>
+                        </div>
+                        <p v-else class="text-xs text-gray-400">Lihat semua produk &rarr;</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- PROMO SPESIAL (produk on-sale; Spec C: jadi Flash Sale + countdown) -->
+            <section v-if="onSaleProducts.length">
+                <div class="flex justify-between items-end border-b pb-2 mb-6">
+                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800 font-heading">
+                        Promo <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Spesial</span>
+                    </h2>
+                    <Link href="/search" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        View All
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </Link>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    <PromoProductCard v-for="product in onSaleProducts" :key="product.id" :product="product" />
+                </div>
+            </section>
+
+            <!-- REKOMENDASI -->
+            <section v-if="products.length">
+                <div class="flex justify-between items-end border-b pb-2 mb-6">
+                    <h2 class="text-xl md:text-2xl font-semibold text-gray-800 font-heading">
+                        Rekomendasi <span class="text-blue-500 font-bold border-b-2 border-blue-500 pb-2 inline-block">Untukmu</span>
+                    </h2>
+                    <Link href="/search" class="text-sm font-medium text-gray-500 hover:text-blue-600 flex items-center gap-1 mb-1 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        View All
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-3 h-3"><path stroke-linecap="round" stroke-linejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                    </Link>
+                </div>
+                <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                    <ProductCard v-for="product in products" :key="product.id" :product="product" />
                 </div>
             </section>
 
