@@ -125,9 +125,13 @@ class StorefrontController extends Controller
             $query->where('base_price', '<=', $request->price_max);
         }
 
-        // Category filter
+        // Category filter — sertakan produk dari subkategori bila parent dipilih (hierarki 2-level).
+        // Produk ditugaskan ke kategori child (mis. Smartphone), jadi memilih parent (Elektronik)
+        // harus ikut menyertakan id child-nya, kalau tidak hasilnya kosong.
         if ($request->filled('categories')) {
-            $query->whereIn('category_id', $request->categories);
+            $selected = (array) $request->categories;
+            $childIds = \App\Models\Category::whereIn('parent_id', $selected)->pluck('id')->all();
+            $query->whereIn('category_id', array_values(array_unique(array_merge($selected, $childIds))));
         }
 
         // Color filter (variant_type = Warna)

@@ -5,6 +5,7 @@ import PromoProductCard from '@/Components/Storefront/PromoProductCard.vue';
 import HeroCarousel from '@/Components/Storefront/HeroCarousel.vue';
 import TrustStrip from '@/Components/Storefront/TrustStrip.vue';
 import { Head, Link } from '@inertiajs/vue3';
+import AddressFormModal from '@/Components/Profile/AddressFormModal.vue';
 
 defineProps({
     heroSlides: { type: Array, default: () => [] },
@@ -21,12 +22,13 @@ const categoryImage = (path) => '/storage/' + path;
     <StorefrontLayout>
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-12">
 
-            <!-- HERO BLOCK: carousel (kiri) + grid promo 2x2 (kanan) -->
+            <!-- HERO BLOCK: carousel (kiri) + daftar produk on-sale (kanan, 1 kolom lebar) -->
             <section class="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div class="lg:col-span-2">
                     <HeroCarousel v-if="heroSlides.length" :slides="heroSlides" />
                 </div>
-                <div v-if="onSaleProducts.length" class="grid grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-3 content-start">
+                <!-- 1 kolom: kartu lebar penuh agar harga rupiah panjang (8 digit) tidak terpotong -->
+                <div v-if="onSaleProducts.length" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-3 content-start">
                     <PromoProductCard
                         v-for="product in onSaleProducts.slice(0, 4)"
                         :key="product.id"
@@ -37,7 +39,7 @@ const categoryImage = (path) => '/storage/' + path;
 
             <!-- TRUST STRIP -->
             <TrustStrip />
-
+            
             <!-- KATEGORI (2 level: kartu parent ber-ikon + child sbg chip teks; image-independent) -->
             <section v-if="categories.length">
                 <div class="flex justify-between items-end border-b pb-2 mb-6">
