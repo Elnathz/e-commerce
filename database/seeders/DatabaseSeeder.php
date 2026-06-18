@@ -22,6 +22,8 @@ class DatabaseSeeder extends Seeder
             LocationSeeder::class,
             UserOrdersSeeder::class,
             ReviewSeeder::class,
+            HeroSlideSeeder::class,
+            SiteSettingSeeder::class,
         ]);
     }
 }
