@@ -3,7 +3,6 @@ import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import ProductCard from '@/Components/Storefront/ProductCard.vue';
 import PromoProductCard from '@/Components/Storefront/PromoProductCard.vue';
 import HeroCarousel from '@/Components/Storefront/HeroCarousel.vue';
-import TrustStrip from '@/Components/Storefront/TrustStrip.vue';
 import { Head, Link } from '@inertiajs/vue3';
 import AddressFormModal from '@/Components/Profile/AddressFormModal.vue';
 
@@ -37,9 +36,6 @@ const categoryImage = (path) => '/storage/' + path;
                 </div>
             </section>
 
-            <!-- TRUST STRIP -->
-            <TrustStrip />
-            
             <!-- KATEGORI (2 level: kartu parent ber-ikon + child sbg chip teks; image-independent) -->
             <section v-if="categories.length">
                 <div class="flex justify-between items-end border-b pb-2 mb-6">
@@ -71,10 +67,8 @@ const categoryImage = (path) => '/storage/' + path;
                                 v-for="child in parent.children"
                                 :key="child.id"
                                 :href="`/search?categories[]=${child.id}`"
-                                class="inline-flex items-center gap-1.5 bg-[#F3F9FB] text-gray-600 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                class="inline-flex items-center bg-[#F3F9FB] text-gray-600 text-xs font-medium px-3 py-1.5 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors duration-150 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             >
-                                <img v-if="child.image_path" :src="categoryImage(child.image_path)" :alt="child.name"
-                                     loading="lazy" class="w-4 h-4 object-contain" />
                                 {{ child.name }}
                             </Link>
                         </div>
