@@ -33,6 +33,7 @@ class HeroSlideAdminTest extends TestCase
         Storage::fake('public');
         $this->actingAs($this->admin())
             ->post(route('admin.hero-slides.store'), [
+                'placement' => 'hero_main',
                 'title' => 'Promo', 'subtitle' => 'Sub', 'badge_label' => 'Hemat',
                 'cta_label' => 'Cek', 'cta_url' => '/search', 'sort_order' => 1, 'is_active' => true,
                 'image' => UploadedFile::fake()->image('banner.jpg', 1200, 440),
