@@ -65,6 +65,7 @@ class HeroSlideController extends Controller
     private function validateData(Request $request, bool $imageRequired): array
     {
         return $request->validate([
+            'placement' => 'required|in:hero_main,hero_side',
             'title' => 'required|string|max:255',
             'subtitle' => 'nullable|string|max:255',
             'badge_label' => 'nullable|string|max:100',

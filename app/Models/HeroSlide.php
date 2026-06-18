@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 class HeroSlide extends Model
 {
     protected $fillable = [
-        'image_path', 'title', 'subtitle', 'badge_label',
+        'placement', 'image_path', 'title', 'subtitle', 'badge_label',
         'cta_label', 'cta_url', 'sort_order', 'is_active',
     ];
 

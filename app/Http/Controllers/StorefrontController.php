@@ -11,47 +11,54 @@ class StorefrontController extends Controller
 {
     public function index()
     {
-        $heroSlides = HeroSlide::where('is_active', true)
-            ->orderBy('sort_order')
-            ->get();
+        $heroMainBanners = HeroSlide::where('is_active', true)->where('placement', 'hero_main')
+            ->orderBy('sort_order')->get(['id', 'image_path', 'title', 'cta_url']);
 
-        // Produk on-sale nyata: punya varian aktif dgn price < base_price (korelasi subquery).
-        $onSaleQuery = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
-            'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
-            ->where('is_active', true)
-            ->whereHas('variants', function ($q) {
-                $q->where('is_active', true)
-                  ->whereColumn('product_variants.price', '<', 'products.base_price');
-            });
+        $heroSideBanners = HeroSlide::where('is_active', true)->where('placement', 'hero_side')
+            ->orderBy('sort_order')->take(4)->get(['id', 'image_path', 'title', 'cta_url']);
 
-        $onSaleProducts = (clone $onSaleQuery)->take(8)->get();
+        // Kategori Populer = parent (hitung produk self+children) + gambar produk perwakilan.
+        $popularCategories = \App\Models\Category::with('children:id,parent_id')
+            ->where('is_active', true)->whereNull('parent_id')->get(['id', 'name'])
+            ->map(function ($parent) {
+                $catIds = $parent->children->pluck('id')->push($parent->id)->all();
+                $count = \App\Models\Product::where('is_active', true)->whereIn('category_id', $catIds)->count();
+                return ['id' => $parent->id, 'name' => $parent->name,
+                        'product_count' => $count, 'image' => $this->representativeImage($catIds)];
+            })->filter(fn ($c) => $c['product_count'] > 0)
+              ->sortByDesc('product_count')->take(10)->values();
 
-        // Fallback bila belum ada produk diskon: produk terbaru (biar section tidak kosong total).
-        if ($onSaleProducts->isEmpty()) {
-            $onSaleProducts = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
-                'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
-                ->where('is_active', true)->latest()->take(8)->get();
-        }
+        // Lagi Banyak Dicari = subkategori + jumlah produk + gambar produk perwakilan.
+        $banyakDicari = \App\Models\Category::where('is_active', true)->whereNotNull('parent_id')
+            ->get(['id', 'name'])
+            ->map(function ($child) {
+                $count = \App\Models\Product::where('is_active', true)->where('category_id', $child->id)->count();
+                return ['id' => $child->id, 'name' => $child->name,
+                        'product_count' => $count, 'image' => $this->representativeImage([$child->id])];
+            })->filter(fn ($c) => $c['product_count'] > 0)
+              ->sortByDesc('product_count')->take(10)->values();
 
-        $products = Product::with(['category', 'variants' => fn($q) => $q->where('is_active', true),
-            'images' => fn($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
-            ->where('is_active', true)
-            ->inRandomOrder()
-            ->take(12)
-            ->get();
-
-        $categories = \App\Models\Category::with('children')
-            ->where('is_active', true)
-            ->whereNull('parent_id')
-            ->orderBy('sort_order')
-            ->get();
+        $products = \App\Models\Product::with(['category', 'variants' => fn ($q) => $q->where('is_active', true),
+            'images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
+            ->where('is_active', true)->inRandomOrder()->take(12)->get();
 
         return Inertia::render('Storefront/Index', [
-            'heroSlides' => $heroSlides,
-            'onSaleProducts' => $onSaleProducts,
+            'heroMainBanners' => $heroMainBanners,
+            'heroSideBanners' => $heroSideBanners,
+            'popularCategories' => $popularCategories,
+            'banyakDicari' => $banyakDicari,
             'products' => $products,
-            'categories' => $categories,
         ]);
+    }
+
+    /** Gambar (image_path relatif) dari produk aktif pertama yang punya gambar di kategori-kategori ini. */
+    private function representativeImage(array $categoryIds): ?string
+    {
+        $product = \App\Models\Product::with(['images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
+            ->where('is_active', true)->whereIn('category_id', $categoryIds)
+            ->whereHas('images')->first();
+
+        return $product?->images->first()?->image_path;
     }
 
     public function show(string $slug)
