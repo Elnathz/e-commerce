@@ -59,4 +59,16 @@ class StorefrontSearchTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($p) => $p->where('totalResults', 1));
     }
+
+    public function test_listing_exposes_price_display_without_fake_discount(): void
+    {
+        $cat = Category::create(['name' => 'C', 'slug' => 'c-list']);
+        $product = Product::create(['category_id' => $cat->id, 'name' => 'Multi', 'slug' => 'multi', 'description' => 'd', 'base_price' => 100000, 'weight_gram' => 100, 'is_active' => true]);
+        ProductVariant::create(['product_id' => $product->id, 'sku' => 'L', 'name' => 'Large', 'price' => 100000, 'stock' => 5, 'reserved_stock' => 0, 'is_active' => true]);
+        ProductVariant::create(['product_id' => $product->id, 'sku' => 'S', 'name' => 'Small', 'price' => 80000, 'stock' => 5, 'reserved_stock' => 0, 'is_active' => true]);
+
+        $this->get('/search?q=Multi')->assertInertia(fn ($p) => $p
+            ->where('products.data.0.price_display.source', 'none')
+            ->where('products.data.0.price_display.effective', 80000));
+    }
 }

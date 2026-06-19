@@ -43,6 +43,7 @@ class StorefrontController extends Controller
         $products = \App\Models\Product::with(['category', 'variants' => fn ($q) => $q->where('is_active', true),
             'images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
             ->where('is_active', true)->inRandomOrder()->take(12)->get();
+        $products->each->setAppends(['price_display']);
 
         return Inertia::render('Storefront/Index', [
             'heroMainBanners' => $heroMainBanners,
@@ -84,6 +85,10 @@ class StorefrontController extends Controller
             $review->return_badge = $review->orderItem?->reviewReturnBadge()['outcome'] ?? null;
         });
 
+        // Task 8: tiap varian aktif membawa price_info (no fake discount).
+        $product->setAppends(['price_display']);
+        $product->variants->each->append('price_info');
+
         // Related products from the same category
         $relatedProducts = Product::with(['variants' => function($q) {
             $q->where('is_active', true);
@@ -95,6 +100,7 @@ class StorefrontController extends Controller
         ->where('is_active', true)
         ->take(6)
         ->get();
+        $relatedProducts->each->setAppends(['price_display']);
 
         return Inertia::render('Storefront/Show', [
             'product' => $product,
@@ -184,6 +190,7 @@ class StorefrontController extends Controller
         }
 
         $products = $query->paginate(12)->withQueryString();
+        $products->getCollection()->each->setAppends(['price_display']);
 
         // Available filters data
         $availableCategories = \App\Models\Category::query()->where('is_active', true)

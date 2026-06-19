@@ -34,6 +34,11 @@ class ProductVariant extends Model
         return app(\App\Services\PricingService::class)->priceInfo($this);
     }
 
+    public function getPriceInfoAttribute(): array
+    {
+        return $this->priceInfo();
+    }
+
     public function effectivePrice(): float
     {
         return app(\App\Services\PricingService::class)->effectivePrice($this);
