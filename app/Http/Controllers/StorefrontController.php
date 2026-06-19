@@ -12,10 +12,12 @@ class StorefrontController extends Controller
     public function index()
     {
         $heroMainBanners = HeroSlide::where('is_active', true)->where('placement', 'hero_main')
-            ->orderBy('sort_order')->get(['id', 'image_path', 'title', 'cta_url']);
+            ->orderBy('sort_order')->get(['id', 'image_path', 'title', 'cta_url', 'link_type', 'link_id'])
+            ->map(fn ($s) => ['id' => $s->id, 'image_path' => $s->image_path, 'title' => $s->title, 'cta_url' => $s->destination_url]);
 
         $heroSideBanners = HeroSlide::where('is_active', true)->where('placement', 'hero_side')
-            ->orderBy('sort_order')->take(4)->get(['id', 'image_path', 'title', 'cta_url']);
+            ->orderBy('sort_order')->take(4)->get(['id', 'image_path', 'title', 'cta_url', 'link_type', 'link_id'])
+            ->map(fn ($s) => ['id' => $s->id, 'image_path' => $s->image_path, 'title' => $s->title, 'cta_url' => $s->destination_url]);
 
         // Kategori Populer = parent (hitung produk self+children) + gambar produk perwakilan.
         $popularCategories = \App\Models\Category::with('children:id,parent_id')

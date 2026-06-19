@@ -2,7 +2,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\HeroSlide;
+use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -12,6 +14,21 @@ class HeroSlideController extends Controller
     public function index()
     {
         $slides = HeroSlide::orderBy('sort_order')->get();
+
+        $categoryIds = $slides->where('link_type', 'category')->pluck('link_id')->filter()->unique();
+        $productIds = $slides->where('link_type', 'product')->pluck('link_id')->filter()->unique();
+        $categoryNames = Category::whereIn('id', $categoryIds)->pluck('name', 'id');
+        $productNames = Product::whereIn('id', $productIds)->pluck('name', 'id');
+
+        $slides->each(function ($slide) use ($categoryNames, $productNames) {
+            $slide->link_label = match ($slide->link_type) {
+                'category' => $categoryNames[$slide->link_id] ?? null,
+                'product' => $productNames[$slide->link_id] ?? null,
+                'custom' => $slide->cta_url,
+                default => null,
+            };
+        });
+
         return Inertia::render('Admin/HeroSlides/Index', [
             'slides' => $slides,
             'stats' => [
@@ -23,7 +40,11 @@ class HeroSlideController extends Controller
 
     public function create()
     {
-        return Inertia::render('Admin/HeroSlides/Form', ['slide' => null]);
+        return Inertia::render('Admin/HeroSlides/Form', [
+            'slide' => null,
+            'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'products' => Product::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     public function store(Request $request)
@@ -36,7 +57,11 @@ class HeroSlideController extends Controller
 
     public function edit(HeroSlide $heroSlide)
     {
-        return Inertia::render('Admin/HeroSlides/Form', ['slide' => $heroSlide]);
+        return Inertia::render('Admin/HeroSlides/Form', [
+            'slide' => $heroSlide,
+            'categories' => Category::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'products' => Product::where('is_active', true)->orderBy('name')->get(['id', 'name']),
+        ]);
     }
 
     public function update(Request $request, HeroSlide $heroSlide)
@@ -67,10 +92,9 @@ class HeroSlideController extends Controller
         return $request->validate([
             'placement' => 'required|in:hero_main,hero_side',
             'title' => 'required|string|max:255',
-            'subtitle' => 'nullable|string|max:255',
-            'badge_label' => 'nullable|string|max:100',
-            'cta_label' => 'nullable|string|max:100',
-            'cta_url' => 'nullable|string|max:500',
+            'link_type' => 'nullable|in:category,product,custom',
+            'link_id' => 'nullable|integer|required_if:link_type,category,product',
+            'cta_url' => 'nullable|string|max:500|required_if:link_type,custom',
             'sort_order' => 'nullable|integer|min:0',
             'is_active' => 'boolean',
             'image' => ($imageRequired ? 'required' : 'nullable') . '|image|max:2048',

@@ -13,6 +13,13 @@ const heroSideSlides = computed(() => props.slides.filter(s => s.placement === '
 
 const slideImage = (path) => path.startsWith('images/') ? '/' + path : '/storage/' + path;
 
+const linkSummary = (slide) => {
+    if (slide.link_type === 'category') return slide.link_label ? `Tujuan: Kategori ${slide.link_label}` : 'Tujuan: Kategori (terhapus)';
+    if (slide.link_type === 'product') return slide.link_label ? `Tujuan: Produk ${slide.link_label}` : 'Tujuan: Produk (terhapus)';
+    if (slide.link_type === 'custom') return `Tujuan: ${slide.cta_url}`;
+    return slide.cta_url ? `Tujuan: ${slide.cta_url}` : 'Tanpa tujuan';
+};
+
 const destroy = (slide) => {
     if (confirm(`Hapus slide "${slide.title}"?`)) {
         router.delete(route('admin.hero-slides.destroy', slide.id), { preserveScroll: true });
@@ -69,8 +76,7 @@ const destroy = (slide) => {
                                                     {{ slide.is_active ? 'Aktif' : 'Nonaktif' }}
                                                 </span>
                                             </div>
-                                            <p class="text-sm text-slate-500 truncate mt-0.5">{{ slide.subtitle }}</p>
-                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; CTA: {{ slide.cta_label || '-' }}</p>
+                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; {{ linkSummary(slide) }}</p>
                                         </div>
                                         <div class="flex items-center gap-2 shrink-0">
                                             <Link :href="route('admin.hero-slides.edit', slide.id)"
@@ -102,8 +108,7 @@ const destroy = (slide) => {
                                                     {{ slide.is_active ? 'Aktif' : 'Nonaktif' }}
                                                 </span>
                                             </div>
-                                            <p class="text-sm text-slate-500 truncate mt-0.5">{{ slide.subtitle }}</p>
-                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; CTA: {{ slide.cta_label || '-' }}</p>
+                                            <p class="text-xs text-slate-400 mt-0.5">Urutan: {{ slide.sort_order }} &middot; {{ linkSummary(slide) }}</p>
                                         </div>
                                         <div class="flex items-center gap-2 shrink-0">
                                             <Link :href="route('admin.hero-slides.edit', slide.id)"

@@ -58,4 +58,17 @@ class HomepageV2Test extends TestCase
             ->where('banyakDicari.0.name', 'Smartphone')
             ->where('banyakDicari.0.product_count', 2));
     }
+
+    public function test_hero_banner_serves_resolved_category_link(): void
+    {
+        $category = Category::create(['name' => 'Elektronik', 'slug' => 'elektronik', 'is_active' => true]);
+        HeroSlide::create([
+            'placement' => 'hero_main', 'image_path' => 'images/banner/banner.png', 'title' => 'M1',
+            'sort_order' => 1, 'is_active' => true, 'link_type' => 'category', 'link_id' => $category->id,
+        ]);
+
+        $this->get('/')->assertOk()->assertInertia(fn ($p) => $p
+            ->component('Storefront/Index')
+            ->where('heroMainBanners.0.cta_url', route('search', ['categories' => [$category->id]])));
+    }
 }

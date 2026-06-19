@@ -3,25 +3,37 @@ import { useForm, Head, Link } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { ref } from 'vue';
 
-const props = defineProps({ slide: { type: Object, default: null } });
+const props = defineProps({
+    slide: { type: Object, default: null },
+    categories: { type: Array, default: () => [] },
+    products: { type: Array, default: () => [] },
+});
 
 const isEdit = !!props.slide;
 const preview = ref(props.slide?.image_path
     ? (props.slide.image_path.startsWith('images/') ? '/' + props.slide.image_path : '/storage/' + props.slide.image_path)
     : null);
 
+// Baris seed lama punya cta_url terisi tapi link_type masih null (dibuat sebelum fitur ini ada).
+// Perlakukan sebagai 'custom' di form supaya link-nya tidak diam-diam hilang saat admin edit-simpan.
+const initialLinkType = props.slide?.link_type || (props.slide?.cta_url ? 'custom' : '');
+
 const form = useForm({
     _method: isEdit ? 'put' : 'post',
     placement: props.slide?.placement ?? 'hero_main',
     title: props.slide?.title ?? '',
-    subtitle: props.slide?.subtitle ?? '',
-    badge_label: props.slide?.badge_label ?? '',
-    cta_label: props.slide?.cta_label ?? '',
+    link_type: initialLinkType,
+    link_id: props.slide?.link_id ?? '',
     cta_url: props.slide?.cta_url ?? '',
     sort_order: props.slide?.sort_order ?? 0,
     is_active: props.slide?.is_active ?? true,
     image: null,
 });
+
+const onLinkTypeChange = () => {
+    form.link_id = '';
+    if (form.link_type !== 'custom') form.cta_url = '';
+};
 
 const onFile = (e) => {
     const file = e.target.files[0];
@@ -72,30 +84,43 @@ const submit = () => {
                     <input v-model="form.title" type="text" class="w-full rounded-lg border-slate-300 text-sm" />
                     <p v-if="form.errors.title" class="text-xs text-red-600 mt-1">{{ form.errors.title }}</p>
                 </div>
+
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Subjudul</label>
-                    <input v-model="form.subtitle" type="text" class="w-full rounded-lg border-slate-300 text-sm" />
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Label Badge</label>
-                        <input v-model="form.badge_label" type="text" placeholder="Mulai dari 17RB-an" class="w-full rounded-lg border-slate-300 text-sm" />
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Tujuan Tombol Banner</label>
+                    <p class="text-xs text-slate-400 mb-2">Saat banner ini diklik pengunjung, ke mana mereka diarahkan? (opsional)</p>
+                    <select v-model="form.link_type" @change="onLinkTypeChange" class="w-full rounded-lg border-slate-300 text-sm">
+                        <option value="">Tanpa tujuan (gambar saja, tidak bisa diklik)</option>
+                        <option value="category">Kategori produk</option>
+                        <option value="product">Produk tertentu</option>
+                        <option value="custom">Link manual (untuk yang familiar URL situs)</option>
+                    </select>
+
+                    <div v-if="form.link_type === 'category'" class="mt-2">
+                        <select v-model="form.link_id" class="w-full rounded-lg border-slate-300 text-sm">
+                            <option value="">Pilih kategori...</option>
+                            <option v-for="cat in categories" :key="cat.id" :value="cat.id">{{ cat.name }}</option>
+                        </select>
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
-                        <input v-model="form.sort_order" type="number" min="0" class="w-full rounded-lg border-slate-300 text-sm" />
+                    <div v-else-if="form.link_type === 'product'" class="mt-2">
+                        <select v-model="form.link_id" class="w-full rounded-lg border-slate-300 text-sm">
+                            <option value="">Pilih produk...</option>
+                            <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+                        </select>
                     </div>
-                </div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Label Tombol (CTA)</label>
-                        <input v-model="form.cta_label" type="text" placeholder="Cek Koleksi" class="w-full rounded-lg border-slate-300 text-sm" />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Link Tombol (CTA)</label>
+                    <div v-else-if="form.link_type === 'custom'" class="mt-2">
                         <input v-model="form.cta_url" type="text" placeholder="/search?categories[]=3" class="w-full rounded-lg border-slate-300 text-sm" />
+                        <p class="text-xs text-slate-400 mt-1">Path relatif situs ini, mis. /search atau /products/nama-produk.</p>
                     </div>
+
+                    <p v-if="form.errors.link_id" class="text-xs text-red-600 mt-1">{{ form.errors.link_id }}</p>
+                    <p v-if="form.errors.cta_url" class="text-xs text-red-600 mt-1">{{ form.errors.cta_url }}</p>
                 </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">Urutan</label>
+                    <input v-model="form.sort_order" type="number" min="0" class="w-full rounded-lg border-slate-300 text-sm" />
+                </div>
+
                 <label class="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
                     <input v-model="form.is_active" type="checkbox" class="rounded border-slate-300 text-blue-600" />
                     Aktif (tampil di storefront)
