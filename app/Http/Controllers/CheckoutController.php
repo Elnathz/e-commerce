@@ -460,5 +460,74 @@ class CheckoutController extends Controller
             'message' => 'Gagal mengambil data ongkos kirim. Pastikan tujuan dan berat valid.'
         ], 500);
     }
+
+    /**
+     * FR030 — Validate a voucher code against the authenticated user's cart.
+     * Subtotal is computed SERVER-SIDE from PricingService effective prices —
+     * client-submitted amounts are never trusted for discount calculation.
+     */
+    public function validateVoucher(Request $request)
+    {
+        $request->validate([
+            'code' => 'required|string',
+            'item_ids' => 'nullable|string',
+            'method' => 'nullable|in:delivery,pickup',
+            'courier' => 'nullable',
+            'shipping_cost' => 'nullable|numeric',
+        ]);
+
+        $user = Auth::user();
+        $cart = $user->cart;
+
+        if (!$cart) {
+            return response()->json(['valid' => false, 'message' => 'Keranjang kosong.']);
+        }
+
+        $query = $cart->items()->with('variant.product');
+        if ($request->item_ids) {
+            $query->whereIn('id', array_map('intval', explode(',', $request->item_ids)));
+        }
+        $items = $query->get();
+
+        $pricing = app(\App\Services\PricingService::class);
+        $subtotal = $items->sum(fn ($i) => $pricing->effectivePrice($i->variant) * $i->quantity);
+        // Fase 1: no Flash Sale items exist yet, so this always evaluates false.
+        // Kept here so the gate activates automatically once Flash Sale (Fase 2)
+        // starts tagging priceInfo()['source'] === 'flash'.
+        $containsFlash = $items->contains(fn ($i) => $pricing->priceInfo($i->variant)['source'] === 'flash');
+
+        $courierType = $this->resolveCourierType($request);
+
+        return response()->json(
+            app(\App\Services\PromotionService::class)->validate(
+                $request->code,
+                (float) $subtotal,
+                (float) $request->input('shipping_cost', 0),
+                $courierType,
+                $containsFlash
+            )
+        );
+    }
+
+    /**
+     * Map a checkout request's shipping method/courier to the courier-type
+     * string PromotionService expects for free_shipping voucher scoping
+     * (Promotion::applicable_shipping_type: 'all' | 'internal' | 'external').
+     *
+     * - pickup => null (no shipping, scope check is skipped by PromotionService)
+     * - courier === 'internal' => 'internal' (Kurir Internal MegaMart, Semarang-only)
+     * - any other courier (jne/pos/tiki/...) => 'external' (RajaOngkir)
+     *
+     * Single source of truth — reused by the checkout submit flow (Task 4) so
+     * voucher validation and voucher reservation never disagree on courier type.
+     */
+    private function resolveCourierType(Request $request): ?string
+    {
+        if ($request->input('method') === 'pickup') {
+            return null;
+        }
+
+        return $request->input('courier') === 'internal' ? 'internal' : 'external';
+    }
 }
 

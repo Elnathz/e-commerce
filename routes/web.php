@@ -62,6 +62,9 @@ Route::middleware('auth')->group(function () {
     // Address management
     Route::resource('addresses', \App\Http\Controllers\AddressController::class)->only(['store', 'update', 'destroy']);
     Route::patch('/addresses/{address}/set-default', [\App\Http\Controllers\AddressController::class, 'setDefault'])->name('addresses.setDefault');
+
+    // Voucher validation (FR030) — server-side subtotal, cart/checkout UI
+    Route::post('/promotions/validate', [\App\Http\Controllers\CheckoutController::class, 'validateVoucher'])->name('promotions.validate');
 });
 
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
