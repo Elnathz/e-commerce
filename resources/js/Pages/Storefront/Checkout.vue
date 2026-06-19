@@ -26,6 +26,17 @@ const showAddressModal = ref(false);
 const isPlacingOrder = ref(false);
 const orderError = ref('');
 
+// Map of cart_item_id => price the customer saw on this page (effective price
+// sent by CheckoutController::index()). Submitted back on order placement so the
+// server-side placement guard in CheckoutController::store() can detect stale prices.
+const consentedPrices = computed(() => {
+    const map = {};
+    for (const item of props.cartItems) {
+        map[item.id] = item.current_price;
+    }
+    return map;
+});
+
 // Form for placing order
 const form = useForm({
     method: props.method,
@@ -34,7 +45,8 @@ const form = useForm({
     shipping_service: null,
     shipping_cost: 0,
     notes: '',
-    item_ids: props.itemIds || ''
+    item_ids: props.itemIds || '',
+    consented_prices: consentedPrices.value
 });
 
 // Format currency

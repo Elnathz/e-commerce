@@ -38,6 +38,8 @@ class CheckoutController extends Controller
         }
 
         // Build query with correct relations: CartItem -> variant -> product
+        // variant.product is eager-loaded so priceInfo()/effectivePrice() (which read
+        // $variant->product->discount_percent) don't trigger N+1 queries per item.
         $query = $cart->items()->with(['variant.product.images', 'variant.images']);
 
         if ($itemIds) {
@@ -78,7 +80,11 @@ class CheckoutController extends Controller
                 'variant_name' => $variant->name,
                 'image' => $image,
                 'quantity' => $item->quantity,
-                'current_price' => $variant->price,
+                // Effective price (manual discount aware) — must match what store()'s
+                // placement guard resolves via PricingService::effectivePrice(), since
+                // this value is round-tripped back as consented_prices on submit.
+                'current_price' => $variant->effectivePrice(),
+                'price_info' => $variant->priceInfo(),
                 'weight' => $variant->weight_gram ?? $product->weight_gram,
                 'available_stock' => $variant->stock - $variant->reserved_stock,
             ];
