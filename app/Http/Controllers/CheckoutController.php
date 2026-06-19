@@ -186,12 +186,12 @@ class CheckoutController extends Controller
                 $pricing = app(\App\Services\PricingService::class);
                 $priceChanged = [];
                 $effectiveById = [];
+                $consentMap = $request->input('consented_prices', []);
                 foreach ($cartItems as $item) {
                     $eff = $pricing->effectivePrice($item->variant);
                     $effectiveById[$item->id] = $eff;
                     if ($request->filled('consented_prices')) {
-                        $consented = (float) ($request->input("consented_prices.{$item->id}", -1));
-                        if ((float) $eff !== $consented) {
+                        if (!array_key_exists((int) $item->id, $consentMap) || (float) $consentMap[(int) $item->id] !== (float) $eff) {
                             $priceChanged[] = $item->variant->product->name . ' (' . $item->variant->name . ')';
                         }
                     }
