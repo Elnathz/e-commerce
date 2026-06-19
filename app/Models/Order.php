@@ -8,7 +8,7 @@ class Order extends Model
 {
     protected $fillable = [
         'order_number', 'user_id', 'status', 'fulfillment_type', 'subtotal',
-        'shipping_cost', 'discount_amount', 'total_amount', 'shipping_address_snapshot',
+        'shipping_cost', 'discount_amount', 'voucher_code', 'discount_on_shipping', 'total_amount', 'shipping_address_snapshot',
         'notes', 'cancelled_at', 'cancelled_reason', 'courier', 'shipping_service', 'tracking_number',
         'shipped_at', 'delivered_at', 'completed_at', 'expired_at',
         'payment_method', 'payment_status', 'paid_at', 'refund_status',

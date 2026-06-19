@@ -10,7 +10,7 @@ class Promotion extends Model
         'code', 'name', 'type', 'value', 'min_purchase',
         'max_usage', 'max_usage_per_user',
         'max_shipping_discount', 'applicable_shipping_type',
-        'used_count', 'valid_from', 'valid_until', 'is_active', 'description',
+        'used_count', 'valid_from', 'valid_until', 'is_active', 'applies_to_flash_sale', 'description',
     ];
 
     protected $casts = [
@@ -18,6 +18,7 @@ class Promotion extends Model
         'min_purchase'           => 'decimal:2',
         'max_shipping_discount'  => 'decimal:2',
         'is_active'              => 'boolean',
+        'applies_to_flash_sale'  => 'boolean',
         'valid_from'             => 'datetime',
         'valid_until'            => 'datetime',
     ];
