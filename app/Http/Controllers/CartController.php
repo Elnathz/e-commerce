@@ -25,6 +25,7 @@ class CartController extends Controller
                 $variant = $item->variant;
                 $product = $variant->product;
                 $availableStock = $variant->stock - $variant->reserved_stock;
+                $info = $variant->priceInfo();
 
                 // Get image: use variant's first image, fallback to product primary image
                 $image = null;
@@ -36,7 +37,7 @@ class CartController extends Controller
                     $image = '/storage/' . $primaryImage->image_path;
                 }
 
-                $priceChanged = (float) $item->unit_price_snapshot !== (float) $variant->price;
+                $priceChanged = (float) $item->unit_price_snapshot !== (float) $info['effective'];
 
                 return [
                     'id' => $item->id,
@@ -45,7 +46,7 @@ class CartController extends Controller
                     'variant_id' => $variant->id,
                     'variant_name' => $variant->name,
                     'variant_type' => $variant->variant_type,
-                    'current_price' => (float) $variant->price,
+                    'current_price' => $info['effective'],
                     'available_stock' => $availableStock,
                     'is_active' => $variant->is_active && $product->is_active,
                     'product_id' => $product->id,
@@ -53,7 +54,7 @@ class CartController extends Controller
                     'product_slug' => $product->slug,
                     'image' => $image,
                     'price_changed' => $priceChanged,
-                    'subtotal' => (float) $variant->price * $item->quantity,
+                    'subtotal' => $info['effective'] * $item->quantity,
                 ];
             });
         }

@@ -70,6 +70,7 @@ class HandleInertiaRequests extends Middleware
             $variant = $item->variant;
             $product = $variant->product;
             $availableStock = $variant->stock - $variant->reserved_stock;
+            $info = $variant->priceInfo();
 
             $image = null;
             if ($variant->images && $variant->images->isNotEmpty()) {
@@ -86,15 +87,15 @@ class HandleInertiaRequests extends Middleware
                 'unit_price_snapshot' => (float) $item->unit_price_snapshot,
                 'variant_id' => $variant->id,
                 'variant_name' => $variant->name,
-                'current_price' => (float) $variant->price,
+                'current_price' => $info['effective'],
                 'available_stock' => $availableStock,
                 'is_active' => $variant->is_active && $product->is_active,
                 'product_id' => $product->id,
                 'product_name' => $product->name,
                 'product_slug' => $product->slug,
                 'image' => $image,
-                'price_changed' => (float) $item->unit_price_snapshot !== (float) $variant->price,
-                'subtotal' => (float) $variant->price * $item->quantity,
+                'price_changed' => (float) $item->unit_price_snapshot !== (float) $info['effective'],
+                'subtotal' => $info['effective'] * $item->quantity,
             ];
         })->toArray();
     }
