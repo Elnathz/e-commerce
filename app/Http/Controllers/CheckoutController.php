@@ -324,7 +324,7 @@ class CheckoutController extends Controller
                     'status' => 'failed',
                 ]);
 
-                // Update order
+                // Update order, store procedure 
                 $order->update([
                     'status' => 'cancelled',
                     'payment_status' => 'failed',

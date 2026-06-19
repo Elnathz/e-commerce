@@ -19,6 +19,13 @@ class ProductController extends Controller
 
         $query = Product::query()
             ->with(['category', 'images'])
+            ->with(['outOfStockVariants' => function ($q) {
+                $q->select(['id', 'product_id', 'name', 'stock', 'reserved_stock']);
+            }])
+            ->with(['criticalVariants' => function ($q) use ($threshold) {
+                $q->whereRaw('(stock - reserved_stock) <= ?', [$threshold])
+                    ->select(['id', 'product_id', 'name', 'stock', 'reserved_stock']);
+            }])
             ->withSum('variants as stock_sum', 'stock')
             ->withSum('variants as reserved_sum', 'reserved_stock')
             ->withCount(['variants as low_stock_variants_count' => function ($q) use ($threshold) {

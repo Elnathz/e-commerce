@@ -28,6 +28,16 @@ class Product extends Model
         return $this->hasMany(ProductVariant::class);
     }
 
+    public function outOfStockVariants()
+    {
+        return $this->hasMany(ProductVariant::class)->whereRaw('(stock - reserved_stock) <= 0');
+    }
+
+    public function criticalVariants()
+    {
+        return $this->hasMany(ProductVariant::class)->whereRaw('(stock - reserved_stock) > 0');
+    }
+
     public function images()
     {
         return $this->hasMany(ProductImage::class);
