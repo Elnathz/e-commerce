@@ -35,7 +35,7 @@ const hasMultiple = computed(() => props.slides.length > 1);
              class="absolute inset-0 transition-opacity duration-700 ease-out"
              :class="i === current ? 'opacity-100' : 'opacity-0 pointer-events-none'">
             <img :src="slideImage(slide.image_path)" :alt="slide.title || 'Banner'"
-                 class="w-full h-full object-cover" :loading="i === 0 ? 'eager' : 'lazy'" />
+                 class="w-full h-full object-contain" :loading="i === 0 ? 'eager' : 'lazy'" />
         </component>
 
         <template v-if="hasMultiple">
