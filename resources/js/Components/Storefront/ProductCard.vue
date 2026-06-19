@@ -1,5 +1,6 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import PriceTag from '@/Components/Storefront/PriceTag.vue';
 
 const props = defineProps({
     product: {
@@ -8,34 +9,11 @@ const props = defineProps({
     },
 });
 
-// Format currency
-const formatPrice = (price) => {
-    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
-};
-
 // Helper to get the primary or first image
 const getPrimaryImage = (product) => {
     if (!product.images || product.images.length === 0) return null;
     const primary = product.images.find(img => img.is_primary);
     return primary ? primary.image_path : product.images[0].image_path;
-};
-
-// Get lowest price among variants, fallback to base_price
-const getLowestPrice = (product) => {
-    if (product.variants && product.variants.length > 0) {
-        const prices = product.variants.map(v => parseFloat(v.price));
-        const lowest = Math.min(...prices);
-        return lowest < parseFloat(product.base_price) ? lowest : parseFloat(product.base_price);
-    }
-    return parseFloat(product.base_price);
-};
-
-// Calculate discount percentage
-const getDiscount = (product) => {
-    const lowest = getLowestPrice(product);
-    const base = parseFloat(product.base_price);
-    if (base <= lowest) return 0;
-    return Math.round(((base - lowest) / base) * 100);
 };
 
 // Group variants by variant_type for smart badge display
@@ -92,13 +70,7 @@ const getTotalStock = (product) => {
 
             <!-- Price and Stock -->
             <div class="mt-auto pt-1 flex justify-between items-end">
-                <div>
-                    <div class="text-base font-bold text-gray-900">{{ formatPrice(getLowestPrice(product)) }}</div>
-                    <div v-if="product.base_price > getLowestPrice(product)" class="flex items-center gap-1.5 mt-0.5">
-                        <span class="text-xs text-gray-400 line-through">{{ formatPrice(product.base_price) }}</span>
-                        <span class="text-[11px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">{{ getDiscount(product) }}%</span>
-                    </div>
-                </div>
+                <PriceTag :info="product.price_display" />
                 <div class="text-[11px] text-gray-500 mb-0.5 text-right whitespace-nowrap">
                     Sisa: <span class="font-medium" :class="{'text-red-600': getTotalStock(product) <= 5}">{{ getTotalStock(product) }}</span>
                 </div>

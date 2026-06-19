@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import StorefrontLayout from '@/Layouts/StorefrontLayout.vue';
 import ProductCard from '@/Components/Storefront/ProductCard.vue';
+import PriceTag from '@/Components/Storefront/PriceTag.vue';
 import { useImageViewer } from '@/Composables/useImageViewer';
 import SharedImageViewerModal from '@/Components/SharedImageViewerModal.vue';
 
@@ -12,10 +13,6 @@ const props = defineProps({
 });
 
 const { isViewerOpen, viewerImages, viewerActiveIndex, viewerTitle, viewerSubtitle, openViewer, closeViewer } = useImageViewer();
-
-// ─── Helpers ───
-const formatPrice = (price) =>
-    new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
 
 const isAddingToCart = ref(false);
 
@@ -102,19 +99,10 @@ watch(selectedVariant, () => {
 });
 
 // ─── Computed Harga Dinamis ───
-const currentPrice = computed(() =>
-    selectedVariant.value ? parseFloat(selectedVariant.value.price) : parseFloat(props.product.base_price)
+// price_info datang dari backend (PricingService), bukan inferensi base_price vs variant price.
+const currentPriceInfo = computed(() =>
+    selectedVariant.value ? selectedVariant.value.price_info : props.product.price_display
 );
-
-const hasDiscount = computed(() =>
-    parseFloat(props.product.base_price) > currentPrice.value
-);
-
-const discountPercent = computed(() => {
-    if (!hasDiscount.value) return 0;
-    const base = parseFloat(props.product.base_price);
-    return Math.round(((base - currentPrice.value) / base) * 100);
-});
 
 const currentStock = computed(() =>
     selectedVariant.value ? selectedVariant.value.stock - (selectedVariant.value.reserved_stock || 0) : 0
@@ -275,12 +263,8 @@ const onGalleryScroll = () => {
                     </div>
 
                     <!-- Price Section -->
-                    <div class="mt-4 space-y-1">
-                        <div class="flex items-baseline gap-3">
-                            <span class="text-2xl md:text-3xl font-extrabold text-gray-900">{{ formatPrice(currentPrice) }}</span>
-                            <span v-if="hasDiscount" class="text-sm font-bold text-white bg-red-500 px-2 py-0.5 rounded-md">-{{ discountPercent }}%</span>
-                        </div>
-                        <div v-if="hasDiscount" class="text-sm text-gray-400 line-through">{{ formatPrice(product.base_price) }}</div>
+                    <div class="mt-4 [&_.text-base]:text-2xl [&_.text-base]:md:text-3xl [&_.text-base]:font-extrabold">
+                        <PriceTag :info="currentPriceInfo" />
                     </div>
 
                     <!-- Stock Info -->

@@ -1,27 +1,13 @@
 <script setup>
 import { Link } from '@inertiajs/vue3';
+import PriceTag from '@/Components/Storefront/PriceTag.vue';
 
 const props = defineProps({ product: { type: Object, required: true } });
-
-const formatPrice = (p) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(p);
 
 const primaryImage = () => {
     if (!props.product.images || props.product.images.length === 0) return null;
     const pri = props.product.images.find(i => i.is_primary);
     return pri ? pri.image_path : props.product.images[0].image_path;
-};
-const lowestPrice = () => {
-    const base = parseFloat(props.product.base_price);
-    if (props.product.variants?.length) {
-        const low = Math.min(...props.product.variants.map(v => parseFloat(v.price)));
-        return low < base ? low : base;
-    }
-    return base;
-};
-const discount = () => {
-    const base = parseFloat(props.product.base_price);
-    const low = lowestPrice();
-    return base > low ? Math.round(((base - low) / base) * 100) : 0;
 };
 </script>
 
@@ -35,12 +21,7 @@ const discount = () => {
         </div>
         <div class="min-w-0 flex-1">
             <h3 class="text-sm font-semibold text-gray-800 line-clamp-2 leading-snug font-heading">{{ product.name }}</h3>
-            <!-- Harga: baris harga lama terpisah; harga aktif + badge boleh wrap (badge turun bila kartu sempit) -->
-            <span v-if="discount() > 0" class="block text-xs text-gray-400 line-through tabular-nums mt-1">{{ formatPrice(product.base_price) }}</span>
-            <div class="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                <span class="text-sm font-bold text-blue-600 whitespace-nowrap tabular-nums">{{ formatPrice(lowestPrice()) }}</span>
-                <span v-if="discount() > 0" class="shrink-0 text-[11px] font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">-{{ discount() }}%</span>
-            </div>
+            <PriceTag :info="product.price_display" />
         </div>
     </Link>
 </template>
