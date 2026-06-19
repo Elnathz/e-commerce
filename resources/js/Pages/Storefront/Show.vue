@@ -263,8 +263,8 @@ const onGalleryScroll = () => {
                     </div>
 
                     <!-- Price Section -->
-                    <div class="mt-4 [&_.text-base]:text-2xl [&_.text-base]:md:text-3xl [&_.text-base]:font-extrabold">
-                        <PriceTag :info="currentPriceInfo" />
+                    <div class="mt-4">
+                        <PriceTag :info="currentPriceInfo" size="lg" />
                     </div>
 
                     <!-- Stock Info -->
