@@ -1,0 +1,49 @@
+<?php
+namespace Tests\Feature;
+use App\Models\{Category, Product, ProductVariant};
+use App\Services\PricingService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\TestCase;
+
+class PricingServiceTest extends TestCase {
+    use RefreshDatabase;
+    private function variant(array $p = [], array $v = []): ProductVariant {
+        $cat = Category::create(['name' => 'C', 'slug' => 'c-'.uniqid()]);
+        $product = Product::create(array_merge([
+            'category_id' => $cat->id, 'name' => 'P', 'slug' => 'p-'.uniqid(),
+            'description' => 'd', 'base_price' => 100000, 'weight_gram' => 100, 'is_active' => true,
+        ], $p));
+        return ProductVariant::create(array_merge([
+            'product_id' => $product->id, 'sku' => 's-'.uniqid(), 'name' => 'V',
+            'price' => 100000, 'stock' => 10, 'reserved_stock' => 0, 'is_active' => true,
+        ], $v));
+    }
+
+    public function test_no_discount_returns_original(): void {
+        $info = app(PricingService::class)->priceInfo($this->variant());
+        $this->assertSame('none', $info['source']);
+        $this->assertEqualsWithDelta(100000, $info['effective'], 0.01);
+        $this->assertSame(0, $info['discount_percent']);
+    }
+
+    public function test_product_percent_discount(): void {
+        $info = app(PricingService::class)->priceInfo($this->variant(['discount_percent' => 25]));
+        $this->assertSame('manual', $info['source']);
+        $this->assertEqualsWithDelta(75000, $info['effective'], 0.01);
+        $this->assertSame(25, $info['discount_percent']);
+    }
+
+    public function test_variant_discount_price_overrides_product_percent(): void {
+        $info = app(PricingService::class)->priceInfo(
+            $this->variant(['discount_percent' => 25], ['discount_price' => 60000])
+        );
+        $this->assertSame('manual', $info['source']);
+        $this->assertEqualsWithDelta(60000, $info['effective'], 0.01);
+    }
+
+    public function test_discount_not_below_price_is_ignored(): void {
+        $info = app(PricingService::class)->priceInfo($this->variant([], ['discount_price' => 120000]));
+        $this->assertSame('none', $info['source']);
+        $this->assertEqualsWithDelta(100000, $info['effective'], 0.01);
+    }
+}
