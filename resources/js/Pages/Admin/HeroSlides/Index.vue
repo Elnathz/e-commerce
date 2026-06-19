@@ -1,7 +1,8 @@
 <script setup>
 import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { computed } from 'vue';
+import ConfirmModal from '@/Components/ConfirmModal.vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     slides: { type: Array, default: () => [] },
@@ -20,10 +21,13 @@ const linkSummary = (slide) => {
     return slide.cta_url ? `Tujuan: ${slide.cta_url}` : 'Tanpa tujuan';
 };
 
-const destroy = (slide) => {
-    if (confirm(`Hapus slide "${slide.title}"?`)) {
-        router.delete(route('admin.hero-slides.destroy', slide.id), { preserveScroll: true });
-    }
+const confirmState = ref({ show: false, target: null });
+const askDelete = (slide) => { confirmState.value = { show: true, target: slide }; };
+const cancelDelete = () => { confirmState.value = { show: false, target: null }; };
+const confirmDelete = () => {
+    const slide = confirmState.value.target;
+    confirmState.value = { show: false, target: null };
+    router.delete(route('admin.hero-slides.destroy', slide.id), { preserveScroll: true });
 };
 </script>
 
@@ -83,7 +87,7 @@ const destroy = (slide) => {
                                                   class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
                                                 Edit
                                             </Link>
-                                            <button @click="destroy(slide)"
+                                            <button @click="askDelete(slide)"
                                                     class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm cursor-pointer">
                                                 Hapus
                                             </button>
@@ -115,7 +119,7 @@ const destroy = (slide) => {
                                                   class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition-colors shadow-sm">
                                                 Edit
                                             </Link>
-                                            <button @click="destroy(slide)"
+                                            <button @click="askDelete(slide)"
                                                     class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm cursor-pointer">
                                                 Hapus
                                             </button>
@@ -133,5 +137,9 @@ const destroy = (slide) => {
 
             </div>
         </div>
+
+        <ConfirmModal :show="confirmState.show" title="Hapus Hero Banner"
+            :message="`Hapus slide \"${confirmState.target?.title}\"? Tindakan ini tidak dapat dibatalkan.`"
+            @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>

@@ -2,6 +2,7 @@
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import Pagination from '@/Components/Pagination.vue';
+import ConfirmModal from '@/Components/ConfirmModal.vue';
 import { ref, watch } from 'vue';
 
 const props = defineProps({
@@ -22,10 +23,13 @@ watch(search, () => {
     }, 350);
 });
 
-const deleteCategory = (cat) => {
-    if (confirm(`Yakin hapus kategori "${cat.name}"? Tindakan ini tidak dapat dibatalkan.`)) {
-        router.delete(route('admin.categories.destroy', cat.id));
-    }
+const confirmState = ref({ show: false, target: null });
+const askDelete = (cat) => { confirmState.value = { show: true, target: cat }; };
+const cancelDelete = () => { confirmState.value = { show: false, target: null }; };
+const confirmDelete = () => {
+    const cat = confirmState.value.target;
+    confirmState.value = { show: false, target: null };
+    router.delete(route('admin.categories.destroy', cat.id));
 };
 </script>
 
@@ -113,7 +117,7 @@ const deleteCategory = (cat) => {
                                         data-delete-disabled
                                     >Hapus</button>
                                     <button
-                                        v-else type="button" @click="deleteCategory(category)" data-delete-enabled
+                                        v-else type="button" @click="askDelete(category)" data-delete-enabled
                                         class="w-full sm:w-auto text-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
                                     >Hapus</button>
                                 </div>
@@ -154,7 +158,7 @@ const deleteCategory = (cat) => {
                                             data-delete-disabled
                                         >Hapus</button>
                                         <button
-                                            v-else type="button" @click="deleteCategory(category)" data-delete-enabled
+                                            v-else type="button" @click="askDelete(category)" data-delete-enabled
                                             class="w-full sm:w-auto text-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
                                         >Hapus</button>
                                     </div>
@@ -198,7 +202,7 @@ const deleteCategory = (cat) => {
                                                 data-delete-disabled
                                             >Hapus</button>
                                             <button
-                                                v-else type="button" @click="deleteCategory(child)" data-delete-enabled
+                                                v-else type="button" @click="askDelete(child)" data-delete-enabled
                                                 class="w-full sm:w-auto text-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-600 hover:text-red-600 hover:border-red-200 transition-colors shadow-sm"
                                             >Hapus</button>
                                         </div>
@@ -214,5 +218,9 @@ const deleteCategory = (cat) => {
                 </div>
             </div>
         </div>
+
+        <ConfirmModal :show="confirmState.show" title="Hapus Kategori"
+            :message="`Yakin hapus kategori \"${confirmState.target?.name}\"? Tindakan ini tidak dapat dibatalkan.`"
+            @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>

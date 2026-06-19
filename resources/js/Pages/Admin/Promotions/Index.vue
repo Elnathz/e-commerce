@@ -3,6 +3,7 @@ import { ref, watch } from 'vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
 import Pagination from '@/Components/Pagination.vue';
+import ConfirmModal from '@/Components/ConfirmModal.vue';
 
 const props = defineProps({
     promotions: Object,
@@ -22,10 +23,13 @@ watch([search, statusFilter, typeFilter], () => {
     }, { preserveState: true, replace: true, preserveScroll: true });
 });
 
-const deletePromotion = (id) => {
-    if (confirm('Yakin ingin menghapus voucher ini? Tindakan ini tidak dapat dibatalkan.')) {
-        router.delete(route('admin.promotions.destroy', id));
-    }
+const confirmState = ref({ show: false, target: null });
+const askDelete = (promo) => { confirmState.value = { show: true, target: promo }; };
+const cancelDelete = () => { confirmState.value = { show: false, target: null }; };
+const confirmDelete = () => {
+    const promo = confirmState.value.target;
+    confirmState.value = { show: false, target: null };
+    router.delete(route('admin.promotions.destroy', promo.id));
 };
 
 const formatRupiah = (value) => {
@@ -236,7 +240,7 @@ const copyCode = (code) => {
                                     <td class="px-6 py-4 align-top text-right text-sm font-medium space-x-3 whitespace-nowrap">
                                         <Link :href="route('admin.promotions.edit', promo.id)" class="text-blue-600 hover:text-blue-800 font-semibold">Edit</Link>
                                         <Link :href="route('admin.promotions.history', promo.id)" class="text-slate-500 hover:text-slate-800 font-semibold">Histori</Link>
-                                        <button @click="deletePromotion(promo.id)" class="text-red-600 hover:text-red-800 font-semibold">Hapus</button>
+                                        <button @click="askDelete(promo)" class="text-red-600 hover:text-red-800 font-semibold">Hapus</button>
                                     </td>
                                 </tr>
                                 <tr v-if="promotions.data.length === 0">
@@ -254,5 +258,9 @@ const copyCode = (code) => {
                 </div>
             </div>
         </div>
+
+        <ConfirmModal :show="confirmState.show" title="Hapus Voucher"
+            :message="`Yakin ingin menghapus voucher \"${confirmState.target?.code}\"? Tindakan ini tidak dapat dibatalkan.`"
+            @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>
