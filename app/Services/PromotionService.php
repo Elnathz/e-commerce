@@ -15,7 +15,7 @@ class PromotionService
      * Validate voucher eligibility WITHOUT reserving quota.
      * Used for real-time validation in cart UI.
      */
-    public function validate(string $code, float $subtotal, float $shippingCost, ?string $courierType = null): array
+    public function validate(string $code, float $subtotal, float $shippingCost, ?string $courierType = null, bool $containsFlash = false): array
     {
         $promotion = Promotion::where('code', strtoupper($code))->first();
 
@@ -55,6 +55,12 @@ class PromotionService
             }
         }
 
+        // FR030 — Flash Sale gate: voucher must opt in via applies_to_flash_sale
+        // to be usable on a cart that contains Flash Sale items.
+        if ($containsFlash && !$promotion->applies_to_flash_sale) {
+            return ['valid' => false, 'message' => 'Voucher ini tidak berlaku untuk pesanan yang berisi produk Flash Sale.'];
+        }
+
         $discountAmount = $this->calculateDiscount($promotion, $subtotal, $shippingCost);
 
         return [
@@ -72,15 +78,15 @@ class PromotionService
      * Uses pessimistic lock (lockForUpdate) + used_count fast-path.
      * Source of truth for audit: promotion_usages table.
      */
-    public function reserve(string $code, int $userId, int $orderId, float $subtotal, float $shippingCost, ?string $courierType = null): PromotionUsage
+    public function reserve(string $code, int $userId, int $orderId, float $subtotal, float $shippingCost, ?string $courierType = null, bool $containsFlash = false): PromotionUsage
     {
-        return DB::transaction(function () use ($code, $userId, $orderId, $subtotal, $shippingCost, $courierType) {
+        return DB::transaction(function () use ($code, $userId, $orderId, $subtotal, $shippingCost, $courierType, $containsFlash) {
             $promotion = Promotion::where('code', strtoupper($code))
                 ->lockForUpdate()
                 ->firstOrFail();
 
             // Full eligibility validation inside lock
-            $this->assertEligible($promotion, $userId, $subtotal, $shippingCost, $courierType);
+            $this->assertEligible($promotion, $userId, $subtotal, $shippingCost, $courierType, $containsFlash);
 
             $discountAmount = $this->calculateDiscount($promotion, $subtotal, $shippingCost);
 
@@ -148,10 +154,16 @@ class PromotionService
     /**
      * Full eligibility assertion (throws on failure).
      */
-    protected function assertEligible(Promotion $promotion, int $userId, float $subtotal, float $shippingCost, ?string $courierType): void
+    protected function assertEligible(Promotion $promotion, int $userId, float $subtotal, float $shippingCost, ?string $courierType, bool $containsFlash = false): void
     {
         if (!$promotion->isValid()) {
             throw new \Exception('Voucher tidak valid atau sudah kadaluarsa.');
+        }
+
+        // FR030 — Flash Sale gate: voucher must opt in via applies_to_flash_sale
+        // to be usable on a cart that contains Flash Sale items.
+        if ($containsFlash && !$promotion->applies_to_flash_sale) {
+            throw new \Exception('Voucher ini tidak berlaku untuk pesanan yang berisi produk Flash Sale.');
         }
 
         if ($subtotal < $promotion->min_purchase) {
