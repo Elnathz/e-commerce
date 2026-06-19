@@ -115,6 +115,7 @@ class CheckoutController extends Controller
             'shipping_cost' => 'required_if:method,delivery|numeric|min:0',
             'notes' => 'nullable|string|max:500',
             'item_ids' => 'nullable|string', // Comma-separated cart_item IDs
+            'consented_prices' => 'nullable|array', // cart_item_id => price customer saw (placement guard)
         ]);
 
         $user = Auth::user();
@@ -174,10 +175,29 @@ class CheckoutController extends Controller
                     }
                 }
 
+                // --- Resolve effective price per item + placement guard (price_changed) ---
+                // Backward-compatible: guard only runs when caller sends consented_prices.
+                $pricing = app(\App\Services\PricingService::class);
+                $priceChanged = [];
+                $effectiveById = [];
+                foreach ($cartItems as $item) {
+                    $eff = $pricing->effectivePrice($item->variant);
+                    $effectiveById[$item->id] = $eff;
+                    if ($request->filled('consented_prices')) {
+                        $consented = (float) ($request->input("consented_prices.{$item->id}", -1));
+                        if ((float) $eff !== $consented) {
+                            $priceChanged[] = $item->variant->product->name . ' (' . $item->variant->name . ')';
+                        }
+                    }
+                }
+                if (!empty($priceChanged)) {
+                    throw new \Exception('Harga berubah untuk: ' . implode(', ', $priceChanged) . '. Silakan tinjau ulang keranjang.');
+                }
+
                 // --- Calculate totals ---
                 $subtotal = 0;
                 foreach ($cartItems as $item) {
-                    $subtotal += $item->variant->price * $item->quantity;
+                    $subtotal += $effectiveById[$item->id] * $item->quantity;
                 }
 
                 $shippingCost = $request->method === 'delivery' ? (float) $request->shipping_cost : 0;
@@ -229,9 +249,9 @@ class CheckoutController extends Controller
                         'product_name_snapshot' => $product->name,
                         'variant_name_snapshot' => $variant->name,
                         'quantity' => $item->quantity,
-                        'unit_price' => $variant->price,
+                        'unit_price' => $effectiveById[$item->id],
                         'weight_gram' => $variant->weight_gram ?? $product->weight_gram,
-                        'subtotal' => $variant->price * $item->quantity,
+                        'subtotal' => $effectiveById[$item->id] * $item->quantity,
                     ]);
                     
                     // Decrement stock
