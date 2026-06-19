@@ -1,5 +1,6 @@
 <script setup>
 import AdminLayout from '@/Layouts/AdminLayout.vue';
+import { computed } from 'vue';
 import { Head, useForm, Link } from '@inertiajs/vue3';
 import InputLabel from '@/Components/InputLabel.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -16,15 +17,34 @@ const variantForm = useForm({
     sku: '',
     name: '',
     price: props.product.base_price,
+    discount_price: '',
     stock: '',
     weight_gram: props.product.weight_gram,
     is_active: true,
 });
 
+// Preview harga efektif: discount_price varian (jika valid) > diskon produk > harga asli.
+const variantEffectivePrice = computed(() => {
+    const price = Number(variantForm.price);
+    if (!price || price <= 0) return null;
+
+    const discountPrice = Number(variantForm.discount_price);
+    if (variantForm.discount_price !== '' && discountPrice > 0 && discountPrice < price) {
+        return discountPrice;
+    }
+
+    const discountPercent = Number(props.product.discount_percent);
+    if (discountPercent > 0) {
+        return price - (price * discountPercent / 100);
+    }
+
+    return price;
+});
+
 const submitVariant = () => {
     variantForm.post(route('admin.products.variants.store', props.product.id), {
         preserveScroll: true,
-        onSuccess: () => variantForm.reset('sku', 'name', 'stock'),
+        onSuccess: () => variantForm.reset('sku', 'name', 'stock', 'discount_price'),
     });
 };
 
@@ -121,7 +141,16 @@ const setPrimaryImage = (imageId) => {
                                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Otomatis terisi harga dasar. Ubah jika berbeda.</p>
                                     <InputError :message="variantForm.errors.price" class="mt-1" />
                                 </div>
-                                
+                                <div>
+                                    <InputLabel value="Harga Diskon Varian (Rp)" />
+                                    <TextInput v-model="variantForm.discount_price" type="number" min="0" :max="variantForm.price ? variantForm.price - 1 : undefined" class="w-full mt-1 border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-black dark:focus:border-white focus:ring-black dark:focus:ring-white" />
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">Kosongkan untuk ikut diskon produk</p>
+                                    <InputError :message="variantForm.errors.discount_price" class="mt-1" />
+                                </div>
+                                <p v-if="variantEffectivePrice !== null" class="text-sm font-semibold text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded px-3 py-2">
+                                    Harga efektif: Rp {{ Number(variantEffectivePrice).toLocaleString('id-ID') }}
+                                </p>
+
                                 <PrimaryButton :disabled="variantForm.processing" class="w-full justify-center bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:text-gray-900 dark:hover:bg-white mt-4">
                                     Tambah Varian
                                 </PrimaryButton>
@@ -140,6 +169,9 @@ const setPrimaryImage = (imageId) => {
                                         <h4 class="font-bold text-gray-900 dark:text-white">{{ variant.name }}</h4>
                                         <p class="text-sm text-gray-500 dark:text-gray-400">
                                             SKU: {{ variant.sku }} &bull; Harga: Rp {{ Number(variant.price).toLocaleString('id-ID') }}
+                                            <span v-if="variant.discount_price">
+                                                &bull; Diskon Varian: Rp {{ Number(variant.discount_price).toLocaleString('id-ID') }}
+                                            </span>
                                         </p>
                                         <p class="text-sm font-semibold mt-1 text-gray-800 dark:text-gray-200">
                                             Stok Tersedia: {{ variant.stock - variant.reserved_stock }} 

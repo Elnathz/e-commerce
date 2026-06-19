@@ -19,6 +19,7 @@ const form = useForm({
     name: props.product?.name || '',
     description: props.product?.description || '',
     base_price: props.product?.base_price || '',
+    discount_percent: props.product?.discount_percent || '',
     weight_gram: props.product?.weight_gram || '',
     is_active: props.product ? Boolean(props.product.is_active) : true,
 });
@@ -124,6 +125,23 @@ const submit = () => {
                                     <p class="text-xs text-slate-500 mt-1">1000 gram = 1 kg</p>
                                     <InputError class="mt-2" :message="form.errors.weight_gram" />
                                 </div>
+                            </div>
+
+                            <!-- Discount Percent -->
+                            <div>
+                                <InputLabel for="discount_percent" value="Diskon Produk (%)" class="font-bold text-slate-700" />
+                                <TextInput
+                                    id="discount_percent"
+                                    type="number"
+                                    min="0"
+                                    max="95"
+                                    step="1"
+                                    class="mt-1 block w-full border-slate-300 focus:border-blue-500 focus:ring-blue-500 rounded-lg shadow-sm"
+                                    v-model="form.discount_percent"
+                                    placeholder="Opsional, contoh: 10"
+                                />
+                                <p class="text-xs text-slate-500 mt-1">Berlaku semua varian kecuali yang punya harga diskon sendiri</p>
+                                <InputError class="mt-2" :message="form.errors.discount_percent" />
                             </div>
 
                             <!-- Is Active -->
