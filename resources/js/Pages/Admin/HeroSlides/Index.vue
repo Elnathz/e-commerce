@@ -139,7 +139,7 @@ const confirmDelete = () => {
         </div>
 
         <ConfirmModal :show="confirmState.show" title="Hapus Hero Banner"
-            :message="`Hapus slide \"${confirmState.target?.title}\"? Tindakan ini tidak dapat dibatalkan.`"
+            :message='`Hapus slide "${confirmState.target?.title}"? Tindakan ini tidak dapat dibatalkan.`'
             @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>

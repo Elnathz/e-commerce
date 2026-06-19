@@ -260,7 +260,7 @@ const copyCode = (code) => {
         </div>
 
         <ConfirmModal :show="confirmState.show" title="Hapus Voucher"
-            :message="`Yakin ingin menghapus voucher \"${confirmState.target?.code}\"? Tindakan ini tidak dapat dibatalkan.`"
+            :message='`Yakin ingin menghapus voucher "${confirmState.target?.code}"? Tindakan ini tidak dapat dibatalkan.`'
             @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>

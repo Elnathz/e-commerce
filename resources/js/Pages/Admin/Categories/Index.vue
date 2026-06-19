@@ -220,7 +220,7 @@ const confirmDelete = () => {
         </div>
 
         <ConfirmModal :show="confirmState.show" title="Hapus Kategori"
-            :message="`Yakin hapus kategori \"${confirmState.target?.name}\"? Tindakan ini tidak dapat dibatalkan.`"
+            :message='`Yakin hapus kategori "${confirmState.target?.name}"? Tindakan ini tidak dapat dibatalkan.`'
             @confirm="confirmDelete" @cancel="cancelDelete" />
     </AdminLayout>
 </template>
