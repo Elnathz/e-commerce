@@ -12,6 +12,7 @@ class Product extends Model
         'slug',
         'description',
         'base_price',
+        'discount_percent',
         'weight_gram',
         'is_active',
         'average_rating',
@@ -46,5 +47,10 @@ class Product extends Model
     public function reviews()
     {
         return $this->hasMany(Review::class);
+    }
+
+    protected function casts(): array
+    {
+        return ['discount_percent' => 'decimal:2'];
     }
 }
