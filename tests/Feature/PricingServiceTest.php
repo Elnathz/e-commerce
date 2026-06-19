@@ -47,6 +47,15 @@ class PricingServiceTest extends TestCase {
         $this->assertEqualsWithDelta(100000, $info['effective'], 0.01);
     }
 
+    public function test_cart_snapshot_uses_effective_price(): void {
+        $variant = $this->variant(['discount_percent' => 20]); // 100000 → 80000
+        $user = \App\Models\User::factory()->create();
+        $this->actingAs($user);
+        $request = request();
+        $item = app(\App\Services\CartService::class)->addItem($request, $variant->id, 1);
+        $this->assertEqualsWithDelta(80000, $item->unit_price_snapshot, 0.01);
+    }
+
     public function test_product_price_display_picks_cheapest_effective_variant(): void {
         $cat = \App\Models\Category::create(['name' => 'C', 'slug' => 'c-'.uniqid()]);
         $product = \App\Models\Product::create([

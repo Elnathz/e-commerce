@@ -104,7 +104,7 @@ class CartService
         return $cart->items()->create([
             'product_variant_id' => $variantId,
             'quantity' => $quantity,
-            'unit_price_snapshot' => $variant->price,
+            'unit_price_snapshot' => $variant->effectivePrice(),
         ]);
     }
 
