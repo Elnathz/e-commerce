@@ -92,6 +92,7 @@ class ProductController extends Controller
             'name' => 'required|string|max:500',
             'description' => 'nullable|string',
             'base_price' => 'required|numeric|min:0',
+            'discount_percent' => 'nullable|numeric|min:0|max:95',
             'weight_gram' => 'required|integer|min:0',
             'is_active' => 'boolean'
         ]);
@@ -127,6 +128,7 @@ class ProductController extends Controller
             'name' => 'required|string|max:500',
             'description' => 'nullable|string',
             'base_price' => 'required|numeric|min:0',
+            'discount_percent' => 'nullable|numeric|min:0|max:95',
             'weight_gram' => 'required|integer|min:0',
             'is_active' => 'boolean'
         ]);

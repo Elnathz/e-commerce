@@ -15,6 +15,7 @@ class ProductVariantController extends Controller
             'sku' => 'required|string|max:100|unique:product_variants',
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
+            'discount_price' => 'nullable|numeric|lt:price',
             'stock' => 'required|integer|min:0',
             'weight_gram' => 'nullable|integer|min:0',
             'is_active' => 'boolean'
@@ -31,6 +32,7 @@ class ProductVariantController extends Controller
             'sku' => 'required|string|max:100|unique:product_variants,sku,' . $variant->id,
             'name' => 'required|string|max:255',
             'price' => 'required|numeric|min:0',
+            'discount_price' => 'nullable|numeric|lt:price',
             'stock' => 'required|integer|min:0',
             'weight_gram' => 'nullable|integer|min:0',
             'is_active' => 'boolean'

@@ -193,4 +193,51 @@ class AdminProductIndexTest extends TestCase
 
         $response->assertForbidden();
     }
+
+    public function test_admin_can_set_manual_discount(): void
+    {
+        $category = Category::create(['name' => 'Kategori Diskon', 'slug' => 'kategori-diskon']);
+        $product = $this->createProduct($category, ['name' => 'Produk Diskon', 'base_price' => 100000]);
+        $variant = $this->createVariant($product, ['price' => 100000]);
+
+        // Product discount_percent persists via admin.products.update.
+        $response = $this->actingAs($this->admin)->put(route('admin.products.update', $product->id), [
+            'category_id' => $category->id,
+            'name' => $product->name,
+            'description' => null,
+            'base_price' => 100000,
+            'discount_percent' => 20,
+            'weight_gram' => 100,
+            'is_active' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertEqualsWithDelta(20, $product->fresh()->discount_percent, 0.01);
+
+        // Variant discount_price persists via admin.products.variants.update, must stay < price.
+        $response = $this->actingAs($this->admin)->put(route('admin.products.variants.update', $variant->id), [
+            'sku' => $variant->sku,
+            'name' => $variant->name,
+            'price' => 100000,
+            'discount_price' => 75000,
+            'stock' => 100,
+            'is_active' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertEqualsWithDelta(75000, $variant->fresh()->discount_price, 0.01);
+
+        // Invalid discount_price >= price must be rejected (lt: invariant).
+        $invalidResponse = $this->actingAs($this->admin)->put(route('admin.products.variants.update', $variant->id), [
+            'sku' => $variant->sku,
+            'name' => $variant->name,
+            'price' => 100000,
+            'discount_price' => 100000,
+            'stock' => 100,
+            'is_active' => true,
+        ]);
+
+        $invalidResponse->assertSessionHasErrors('discount_price');
+        $this->assertEqualsWithDelta(75000, $variant->fresh()->discount_price, 0.01);
+    }
 }
