@@ -29,6 +29,16 @@ class ProductVariant extends Model
         return $this->hasMany(ProductImage::class, 'product_variant_id');
     }
 
+    public function priceInfo(): array
+    {
+        return app(\App\Services\PricingService::class)->priceInfo($this);
+    }
+
+    public function effectivePrice(): float
+    {
+        return app(\App\Services\PricingService::class)->effectivePrice($this);
+    }
+
     protected function casts(): array
     {
         return ['price' => 'decimal:2', 'discount_price' => 'decimal:2'];

@@ -46,4 +46,17 @@ class PricingServiceTest extends TestCase {
         $this->assertSame('none', $info['source']);
         $this->assertEqualsWithDelta(100000, $info['effective'], 0.01);
     }
+
+    public function test_product_price_display_picks_cheapest_effective_variant(): void {
+        $cat = \App\Models\Category::create(['name' => 'C', 'slug' => 'c-'.uniqid()]);
+        $product = \App\Models\Product::create([
+            'category_id' => $cat->id, 'name' => 'P', 'slug' => 'p-'.uniqid(),
+            'description' => 'd', 'base_price' => 100000, 'weight_gram' => 100, 'is_active' => true,
+        ]);
+        \App\Models\ProductVariant::create(['product_id' => $product->id, 'sku' => 'a'.uniqid(), 'name' => 'Large', 'price' => 100000, 'stock' => 5, 'reserved_stock' => 0, 'is_active' => true]);
+        \App\Models\ProductVariant::create(['product_id' => $product->id, 'sku' => 'b'.uniqid(), 'name' => 'Small', 'price' => 80000, 'stock' => 5, 'reserved_stock' => 0, 'is_active' => true]);
+        $display = $product->fresh()->price_display;
+        $this->assertEqualsWithDelta(80000, $display['effective'], 0.01);
+        $this->assertSame('none', $display['source']); // varian murah BUKAN diskon
+    }
 }
