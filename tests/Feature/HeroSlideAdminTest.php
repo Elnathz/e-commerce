@@ -115,4 +115,92 @@ class HeroSlideAdminTest extends TestCase
             ->assertRedirect(route('admin.hero-slides.index'));
         $this->assertDatabaseMissing('hero_slides', ['id' => $slide->id]);
     }
+
+    public function test_cannot_create_5th_hero_side_slide(): void
+    {
+        Storage::fake('public');
+        for ($i = 1; $i <= 4; $i++) {
+            HeroSlide::create(['placement' => 'hero_side', 'image_path' => "hero-slides/s{$i}.jpg", 'title' => "Side {$i}", 'is_active' => true]);
+        }
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.hero-slides.store'), [
+                'placement' => 'hero_side', 'title' => 'Side 5', 'sort_order' => 5, 'is_active' => true,
+                'image' => UploadedFile::fake()->image('banner.jpg', 1200, 440),
+            ])
+            ->assertSessionHasErrors('placement');
+
+        $this->assertDatabaseMissing('hero_slides', ['title' => 'Side 5']);
+        $this->assertSame(4, HeroSlide::where('placement', 'hero_side')->count());
+    }
+
+    public function test_cannot_create_11th_hero_main_slide(): void
+    {
+        Storage::fake('public');
+        for ($i = 1; $i <= 10; $i++) {
+            HeroSlide::create(['placement' => 'hero_main', 'image_path' => "hero-slides/m{$i}.jpg", 'title' => "Main {$i}", 'is_active' => true]);
+        }
+
+        $this->actingAs($this->admin())
+            ->post(route('admin.hero-slides.store'), [
+                'placement' => 'hero_main', 'title' => 'Main 11', 'sort_order' => 11, 'is_active' => true,
+                'image' => UploadedFile::fake()->image('banner.jpg', 1200, 440),
+            ])
+            ->assertSessionHasErrors('placement');
+
+        $this->assertSame(10, HeroSlide::where('placement', 'hero_main')->count());
+    }
+
+    public function test_editing_slide_within_full_placement_still_works(): void
+    {
+        Storage::fake('public');
+        $slides = [];
+        for ($i = 1; $i <= 4; $i++) {
+            $slides[] = HeroSlide::create(['placement' => 'hero_side', 'image_path' => "hero-slides/s{$i}.jpg", 'title' => "Side {$i}", 'is_active' => true]);
+        }
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.hero-slides.update', $slides[0]->id), [
+                'placement' => 'hero_side', 'title' => 'Side 1 Updated', 'sort_order' => 1, 'is_active' => true,
+            ])
+            ->assertRedirect(route('admin.hero-slides.index'));
+
+        $this->assertDatabaseHas('hero_slides', ['id' => $slides[0]->id, 'title' => 'Side 1 Updated']);
+    }
+
+    public function test_editing_slide_still_works_when_placement_already_over_cap(): void
+    {
+        // Simulasikan data lama yang sudah melebihi cap baru (mis. dibuat sebelum guard ada).
+        Storage::fake('public');
+        $slides = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $slides[] = HeroSlide::create(['placement' => 'hero_side', 'image_path' => "hero-slides/s{$i}.jpg", 'title' => "Side {$i}", 'is_active' => true]);
+        }
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.hero-slides.update', $slides[4]->id), [
+                'placement' => 'hero_side', 'title' => 'Side 5 Updated', 'sort_order' => 5, 'is_active' => true,
+            ])
+            ->assertRedirect(route('admin.hero-slides.index'));
+
+        $this->assertDatabaseHas('hero_slides', ['id' => $slides[4]->id, 'title' => 'Side 5 Updated']);
+        $this->assertSame(5, HeroSlide::where('placement', 'hero_side')->count());
+    }
+
+    public function test_cannot_move_slide_into_full_placement(): void
+    {
+        Storage::fake('public');
+        for ($i = 1; $i <= 4; $i++) {
+            HeroSlide::create(['placement' => 'hero_side', 'image_path' => "hero-slides/s{$i}.jpg", 'title' => "Side {$i}", 'is_active' => true]);
+        }
+        $mainSlide = HeroSlide::create(['placement' => 'hero_main', 'image_path' => 'hero-slides/m1.jpg', 'title' => 'Main 1', 'is_active' => true]);
+
+        $this->actingAs($this->admin())
+            ->put(route('admin.hero-slides.update', $mainSlide->id), [
+                'placement' => 'hero_side', 'title' => 'Main 1', 'sort_order' => 1, 'is_active' => true,
+            ])
+            ->assertSessionHasErrors('placement');
+
+        $this->assertDatabaseHas('hero_slides', ['id' => $mainSlide->id, 'placement' => 'hero_main']);
+    }
 }

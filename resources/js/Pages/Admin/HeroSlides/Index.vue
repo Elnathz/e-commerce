@@ -7,6 +7,7 @@ import { ref, computed } from 'vue';
 const props = defineProps({
     slides: { type: Array, default: () => [] },
     stats: { type: Object, default: () => ({ total: 0, active: 0 }) },
+    limits: { type: Object, default: () => ({ hero_main: 10, hero_side: 4 }) },
 });
 
 const heroMainSlides = computed(() => props.slides.filter(s => s.placement === 'hero_main'));
@@ -66,7 +67,9 @@ const confirmDelete = () => {
                     <div class="p-4 space-y-6">
                         <template v-if="slides.length">
                             <div class="space-y-3">
-                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Hero Utama</h2>
+                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                                    Hero Utama <span class="text-slate-400 font-normal normal-case">({{ heroMainSlides.length }}/{{ limits.hero_main }})</span>
+                                </h2>
                                 <div v-if="heroMainSlides.length" class="space-y-3">
                                     <div v-for="slide in heroMainSlides" :key="slide.id"
                                          class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-4 hover:border-blue-300 transition-colors">
@@ -98,7 +101,9 @@ const confirmDelete = () => {
                             </div>
 
                             <div class="space-y-3">
-                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">Banner Samping</h2>
+                                <h2 class="text-sm font-bold text-slate-700 uppercase tracking-wide">
+                                    Banner Samping <span class="text-slate-400 font-normal normal-case">({{ heroSideSlides.length }}/{{ limits.hero_side }})</span>
+                                </h2>
                                 <div v-if="heroSideSlides.length" class="space-y-3">
                                     <div v-for="slide in heroSideSlides" :key="slide.id"
                                          class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 flex items-center gap-4 hover:border-blue-300 transition-colors">

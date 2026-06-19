@@ -1,12 +1,14 @@
 <script setup>
 import { useForm, Head, Link } from '@inertiajs/vue3';
 import AdminLayout from '@/Layouts/AdminLayout.vue';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 
 const props = defineProps({
     slide: { type: Object, default: null },
     categories: { type: Array, default: () => [] },
     products: { type: Array, default: () => [] },
+    counts: { type: Object, default: () => ({ hero_main: 0, hero_side: 0 }) },
+    limits: { type: Object, default: () => ({ hero_main: 10, hero_side: 4 }) },
 });
 
 const isEdit = !!props.slide;
@@ -29,6 +31,18 @@ const form = useForm({
     is_active: props.slide?.is_active ?? true,
     image: null,
 });
+
+const usedCount = computed(() => props.counts[form.placement] ?? 0);
+const placementLimit = computed(() => props.limits[form.placement] ?? Infinity);
+// Slide yang tetap di placement aslinya tidak menambah slot terpakai — jangan blokir edit no-op
+// meski placement itu kebetulan sudah di atas cap saat ini (lihat HeroSlideController::guardPlacementLimit).
+const isPlacementFull = computed(() => {
+    if (props.slide && props.slide.placement === form.placement) return false;
+    return usedCount.value >= placementLimit.value;
+});
+// Untuk tampilan: kalau slide ini sudah ada di placement yang sama, hitung dirinya sendiri juga
+// (counts dari server mengecualikan slide ini), supaya angka yang tampil = total sebenarnya.
+const displayCount = computed(() => (props.slide && props.slide.placement === form.placement) ? usedCount.value + 1 : usedCount.value);
 
 const onLinkTypeChange = () => {
     form.link_id = '';
@@ -64,7 +78,11 @@ const submit = () => {
                         <option value="hero_side">Banner Samping</option>
                     </select>
                     <p class="text-xs text-slate-400 mt-1">
-                        {{ form.placement === 'hero_main' ? 'Rekomendasi gambar 1280×640px (rasio 2:1).' : 'Rekomendasi gambar 640×300px (rasio ~2:1). Maks 4 banner samping tampil.' }}
+                        {{ form.placement === 'hero_main' ? 'Rekomendasi gambar 1280×640px (rasio 2:1).' : 'Rekomendasi gambar 640×300px (rasio ~2:1).' }}
+                        Terpakai {{ displayCount }}/{{ placementLimit }} slot.
+                    </p>
+                    <p v-if="isPlacementFull" class="text-xs text-red-600 mt-1 font-semibold">
+                        Posisi ini sudah penuh ({{ placementLimit }} slide). Hapus atau pindahkan slide lain dahulu sebelum menambah di sini.
                     </p>
                     <p v-if="form.errors.placement" class="text-xs text-red-600 mt-1">{{ form.errors.placement }}</p>
                 </div>
@@ -128,7 +146,7 @@ const submit = () => {
 
                 <div class="flex justify-end gap-3 pt-2">
                     <Link :href="route('admin.hero-slides.index')" class="px-4 py-2 text-sm text-slate-600 hover:text-slate-800">Batal</Link>
-                    <button type="submit" :disabled="form.processing"
+                    <button type="submit" :disabled="form.processing || isPlacementFull"
                             class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg disabled:opacity-50 cursor-pointer">
                         {{ form.processing ? 'Menyimpan...' : 'Simpan' }}
                     </button>
