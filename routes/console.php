@@ -18,6 +18,9 @@ Schedule::command('orders:auto-cancel-stale')->daily();
 Schedule::command('activity:prune')->dailyAt('03:00');
 Schedule::command('promotions:reconcile')->dailyAt('02:00');
 
+// Fase 2 Task 9: Flash sale quota reconciliation (nightly)
+Schedule::command('flash-sale:reconcile')->dailyAt('02:05');
+
 // Sprint 9: Cleanup expired export jobs (daily)
 Schedule::command('exports:cleanup')->dailyAt('03:00');
 
