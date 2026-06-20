@@ -122,6 +122,7 @@ class CheckoutController extends Controller
             'notes' => 'nullable|string|max:500',
             'item_ids' => 'nullable|string', // Comma-separated cart_item IDs
             'consented_prices' => 'nullable|array', // cart_item_id => price customer saw (placement guard)
+            'voucher_code' => 'nullable|string', // FR030 — reserved atomically with stock below
         ]);
 
         $user = Auth::user();
@@ -264,6 +265,34 @@ class CheckoutController extends Controller
                     $variant->decrement('stock', $item->quantity);
 
                     $cartItemIdsToDelete[] = $item->id;
+                }
+
+                // --- FR030: Reserve voucher atomically with stock (same transaction) ---
+                // A bad/ineligible voucher throws inside reserve()->assertEligible(),
+                // which propagates out of this closure and rolls back the whole
+                // transaction (stock reservation + decrement + Order/OrderItems).
+                if ($request->filled('voucher_code')) {
+                    $code = strtoupper($request->voucher_code);
+                    $promo = \App\Models\Promotion::where('code', $code)->firstOrFail();
+                    $courierType = $this->resolveCourierType($request);
+                    $containsFlash = false; // Fase 2 menghitung dari item flash
+
+                    $usage = app(\App\Services\PromotionService::class)->reserve(
+                        $code,
+                        $user->id,
+                        $order->id,
+                        $subtotal,
+                        $shippingCost,
+                        $courierType,
+                        $containsFlash
+                    );
+
+                    $order->update([
+                        'discount_amount' => $usage->discount_applied,
+                        'voucher_code' => $code,
+                        'discount_on_shipping' => $promo->type === 'free_shipping',
+                        'total_amount' => $subtotal + $shippingCost - $usage->discount_applied,
+                    ]);
                 }
 
                 // --- Clear checked-out items from cart ---

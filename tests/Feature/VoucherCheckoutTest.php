@@ -79,6 +79,35 @@ class VoucherCheckoutTest extends TestCase
         ])->assertOk()->assertJson(['valid' => false]);
     }
 
+    public function test_checkout_applies_voucher_and_sets_discount(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 2); // subtotal 200000
+        // PromotionObserver::created() logs Auth::id() as admin_id (FK to users,
+        // NOT NULL) — authenticate before creating the Promotion fixture.
+        Auth::login($user);
+        \App\Models\Promotion::create([
+            'code' => 'DISC10',
+            'name' => 'Disc 10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => false,
+        ]);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup', 'item_ids' => (string) $item->id, 'voucher_code' => 'DISC10',
+        ])->assertRedirect();
+
+        $order = \App\Models\Order::first();
+        $this->assertNotNull($order);
+        $this->assertEqualsWithDelta(200000, $order->subtotal, 0.01);
+        $this->assertEqualsWithDelta(20000, $order->discount_amount, 0.01);
+        $this->assertEqualsWithDelta(180000, $order->total_amount, 0.01);
+        $this->assertSame('DISC10', $order->voucher_code);
+        $this->assertDatabaseHas('promotion_usages', ['order_id' => $order->id, 'status' => 'reserved']);
+    }
+
     public function test_validate_free_shipping_voucher_respects_internal_courier_scope(): void
     {
         [$user, $item] = $this->setupCart(50000, 1); // subtotal 50000
