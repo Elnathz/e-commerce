@@ -2,7 +2,8 @@
 
 namespace Tests\Feature;
 
-use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, Promotion, Order, OrderItem};
+use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, Promotion, PromotionUsage, Order, OrderItem};
+use App\Services\PromotionService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
@@ -182,5 +183,147 @@ class VoucherCheckoutTest extends TestCase
 
         // No promotion_usages row leaked for this failed attempt.
         $this->assertDatabaseCount('promotion_usages', 0);
+    }
+
+    /**
+     * Fase 1 Task 6: PromotionService::confirm() flips reserved -> confirmed
+     * when an order is paid (mirrors PaymentController::handlePaymentSuccess()
+     * calling confirm() directly — the webhook itself is out of scope here).
+     * used_count must stay at 1 — a confirmed usage is still counted quota.
+     */
+    public function test_voucher_confirmed_on_paid(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 2); // subtotal 200000
+        Auth::login($user);
+        $promo = Promotion::create([
+            'code' => 'DISC10',
+            'name' => 'Disc 10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => false,
+        ]);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup', 'item_ids' => (string) $item->id, 'voucher_code' => 'DISC10',
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertDatabaseHas('promotion_usages', ['order_id' => $order->id, 'status' => 'reserved']);
+        $this->assertSame(1, $promo->refresh()->used_count);
+
+        // Drive the payment-success path's promotion confirmation directly
+        // (PaymentController::handlePaymentSuccess() calls this same line).
+        app(PromotionService::class)->confirm($order->id);
+
+        $usage = PromotionUsage::where('order_id', $order->id)->first();
+        $this->assertSame('confirmed', $usage->status);
+        $this->assertNotNull($usage->confirmed_at);
+        // Confirmed usage is still counted quota — used_count must NOT change.
+        $this->assertSame(1, $promo->refresh()->used_count);
+    }
+
+    /**
+     * Fase 1 Task 6 (financial bug fix): customer-initiated cancel via
+     * orders.cancel must release the reserved promotion quota (FR030),
+     * not just the reserved stock. Before the fix, used_count leaked and
+     * the per-user limit was wrongly consumed forever.
+     */
+    public function test_voucher_released_on_customer_cancel(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 2); // subtotal 200000
+        $variant = $item->variant;
+        Auth::login($user);
+        $promo = Promotion::create([
+            'code' => 'DISC10',
+            'name' => 'Disc 10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => false,
+        ]);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup', 'item_ids' => (string) $item->id, 'voucher_code' => 'DISC10',
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertSame(1, $promo->refresh()->used_count);
+
+        $variant->refresh();
+        $reservedBeforeCancel = $variant->reserved_stock;
+        $this->assertSame(2, $reservedBeforeCancel);
+
+        $this->actingAs($user)
+            ->post(route('orders.cancel', $order->order_number))
+            ->assertRedirect(route('home'));
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->status);
+        $this->assertSame('failed', $order->payment_status);
+
+        $usage = PromotionUsage::where('order_id', $order->id)->first();
+        $this->assertSame('released', $usage->status);
+        $this->assertNotNull($usage->released_at);
+
+        // Quota restored — the financial bug this task fixes.
+        $this->assertSame(0, $promo->refresh()->used_count);
+
+        // Stock release must still work (fix didn't regress existing behavior).
+        $variant->refresh();
+        $this->assertSame(0, $variant->reserved_stock);
+    }
+
+    /**
+     * Fase 1 Task 6 (financial bug fix): the expiry cron (orders:cancel-expired)
+     * must also release the reserved promotion quota, mirroring the
+     * customer-cancel fix above.
+     */
+    public function test_voucher_released_on_expiry_cron(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 2); // subtotal 200000
+        $variant = $item->variant;
+        Auth::login($user);
+        $promo = Promotion::create([
+            'code' => 'DISC10',
+            'name' => 'Disc 10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => false,
+        ]);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup', 'item_ids' => (string) $item->id, 'voucher_code' => 'DISC10',
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertSame(1, $promo->refresh()->used_count);
+
+        // Force expiry
+        $order->update(['expired_at' => now()->subHour()]);
+
+        $this->artisan('orders:cancel-expired')->assertExitCode(0);
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->status);
+        $this->assertSame('failed', $order->payment_status);
+
+        $usage = PromotionUsage::where('order_id', $order->id)->first();
+        $this->assertSame('released', $usage->status);
+        $this->assertNotNull($usage->released_at);
+
+        // Quota restored — the financial bug this task fixes.
+        $this->assertSame(0, $promo->refresh()->used_count);
+
+        // Stock release must still work (fix didn't regress existing behavior).
+        $variant->refresh();
+        $this->assertSame(0, $variant->reserved_stock);
     }
 }
