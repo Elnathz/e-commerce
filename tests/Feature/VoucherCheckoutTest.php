@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, Promotion};
+use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, Promotion, Order, OrderItem};
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Tests\TestCase;
@@ -141,5 +141,46 @@ class VoucherCheckoutTest extends TestCase
             'courier' => 'internal',
             'shipping_cost' => 15000,
         ])->assertOk()->assertJson(['valid' => true, 'discount_amount' => 15000]);
+    }
+
+    /**
+     * Review hardening (FR030): CheckoutController::store() reserves the voucher
+     * INSIDE the order-placement DB::transaction. An unknown voucher_code makes
+     * the firstOrFail() lookup throw, which must propagate out of the closure and
+     * roll back the ENTIRE transaction — order, order items, stock reservation,
+     * stock decrement, and the cart deletion — leaving the cart exactly as it was.
+     * Without this atomicity, a bad voucher could leak a leftover order / reserved
+     * stock while charging nothing, or silently drop the cart item.
+     */
+    public function test_invalid_voucher_rolls_back_entire_order_placement(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 2); // subtotal 200000
+        $variant = $item->variant;
+        $originalStock = $variant->stock;
+        $originalReserved = $variant->reserved_stock;
+
+        $response = $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+            'voucher_code' => 'KODENGACO', // does not exist -> firstOrFail() throws inside transaction
+        ]);
+
+        $response->assertRedirect('/cart');
+        $response->assertSessionHas('error');
+
+        // No order / order items were created — the whole transaction rolled back.
+        $this->assertSame(0, Order::count());
+        $this->assertSame(0, OrderItem::count());
+
+        // Stock reservation made earlier in the same transaction must be undone too.
+        $variant->refresh();
+        $this->assertSame($originalReserved, $variant->reserved_stock);
+        $this->assertSame($originalStock, $variant->stock);
+
+        // Cart item must survive untouched — it was never deleted.
+        $this->assertNotNull(CartItem::find($item->id));
+
+        // No promotion_usages row leaked for this failed attempt.
+        $this->assertDatabaseCount('promotion_usages', 0);
     }
 }
