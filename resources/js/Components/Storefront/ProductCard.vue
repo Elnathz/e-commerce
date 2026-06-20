@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import PriceTag from '@/Components/Storefront/PriceTag.vue';
+import BoltIcon from '@/Components/Storefront/Icons/BoltIcon.vue';
+import FireIcon from '@/Components/Storefront/Icons/FireIcon.vue';
 
 const props = defineProps({
     product: {
@@ -34,6 +36,11 @@ const quotaLabel = computed(() => {
     if (fq.quota === null || fq.quota === undefined) return `${fq.sold} terjual`;
     return fq.sold >= fq.quota ? 'Habis' : `Terjual ${fq.sold}`;
 });
+
+// Discount percent for the flash corner badge (only when resolved as flash).
+const flashDiscountPercent = computed(() =>
+    showFlashQuota.value ? (props.product.price_display?.discount_percent ?? 0) : 0
+);
 
 // Helper to get the primary or first image
 const getPrimaryImage = (product) => {
@@ -78,6 +85,14 @@ const getTotalStock = (product) => {
                 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
             <div v-else class="w-full h-full flex items-center justify-center text-gray-300 text-xs uppercase tracking-wide">No Image</div>
+
+            <!-- Flash discount corner badge -->
+            <span
+                v-if="showFlashQuota && flashDiscountPercent > 0"
+                class="absolute top-0 left-0 inline-flex items-center gap-0.5 rounded-br-lg bg-red-600 px-2 py-1 text-[11px] font-extrabold text-white shadow-sm tabular-nums"
+            >
+                <BoltIcon class="w-3 h-3" />−{{ flashDiscountPercent }}%
+            </span>
         </div>
 
         <!-- Details -->
@@ -94,24 +109,28 @@ const getTotalStock = (product) => {
                 </template>
             </div>
 
-            <!-- Price and Stock -->
+            <!-- Price and Stock. On flash cards the quota bar below already
+                 conveys availability, so the "Sisa" stock line is omitted to
+                 keep the narrow card uncluttered. -->
             <div class="mt-auto pt-1 flex justify-between items-end gap-1.5">
                 <PriceTag :info="product.price_display" />
-                <div class="text-[11px] text-gray-500 mb-0.5 text-right whitespace-nowrap">
+                <div v-if="!showFlashQuota" class="text-[11px] text-gray-500 mb-0.5 text-right whitespace-nowrap">
                     Sisa: <span class="font-medium" :class="{'text-red-600': getTotalStock(product) <= 5}">{{ getTotalStock(product) }}</span>
                 </div>
             </div>
 
-            <!-- Flash Sale quota progress (urgency) -->
-            <div v-if="showFlashQuota" class="mt-2">
-                <div class="relative h-4 rounded-full bg-orange-100 overflow-hidden">
+            <!-- Flash Sale quota progress (urgency) — label sits above the bar so
+                 it always has contrast (no white text over a near-empty track). -->
+            <div v-if="showFlashQuota" class="mt-2.5">
+                <div class="flex items-center gap-1 mb-1 text-[11px] font-semibold text-red-600">
+                    <FireIcon class="w-3 h-3 shrink-0" />
+                    <span class="tabular-nums">{{ quotaLabel }}</span>
+                </div>
+                <div class="h-1.5 rounded-full bg-red-100 overflow-hidden">
                     <div
-                        class="absolute inset-y-0 left-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-full transition-[width] duration-300"
+                        class="h-full bg-red-500 rounded-full transition-[width] duration-300"
                         :style="{ width: quotaPct + '%' }"
                     ></div>
-                    <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white tabular-nums">
-                        {{ quotaLabel }}
-                    </span>
                 </div>
             </div>
         </div>
