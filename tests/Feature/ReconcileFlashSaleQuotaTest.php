@@ -10,8 +10,15 @@ use Tests\TestCase;
  * Fase 2 Task 9 (T11): ReconcileFlashSaleQuota — the nightly safety net that
  * heals flash_sale_items.sold_count drift caused by the non-idempotent
  * FlashSaleService::release() (Task 6). Source of truth = SUM(order_items.quantity)
- * for flash-linked order_items on orders whose reservation is still HELD
- * (i.e. NOT cancelled — the only orders.status value that means "released").
+ * for flash-linked order_items on orders whose reservation is still HELD.
+ *
+ * status='cancelled' alone is NOT a reliable "released" signal — it is
+ * overloaded. The true released fingerprint is status='cancelled' AND
+ * payment_status='failed' (CheckoutController::cancel, CancelExpiredOrders,
+ * PaymentController failure webhook). AutoCancelStaleOrders also sets
+ * status='cancelled' but leaves payment_status='paid' and never releases
+ * the flash reservation — those must still be COUNTED (mirrors the Fase 1
+ * voucher rule that paid-order promotion quota stays consumed).
  */
 class ReconcileFlashSaleQuotaTest extends TestCase
 {
@@ -94,8 +101,8 @@ class ReconcileFlashSaleQuotaTest extends TestCase
     /**
      * T11: a flash_sale_item with a drifted sold_count (stored 5) must be
      * recomputed to the true held quantity. qty=2 on a still-held order
-     * (pending) counts; qty=3 on a cancelled order (reservation released)
-     * must NOT count. True sold_count = 2.
+     * (pending) counts; qty=3 on a cancelled+failed order (reservation
+     * genuinely released) must NOT count. True sold_count = 2.
      */
     public function test_reconcile_fixes_drifted_sold_count(): void
     {
@@ -128,9 +135,10 @@ class ReconcileFlashSaleQuotaTest extends TestCase
     }
 
     /**
-     * A flash_sale_item whose only order_items sit on a cancelled order
-     * (reservation released) must reconcile to 0, even though order_items
-     * exist — cancelled orders don't count toward sold_count.
+     * A flash_sale_item whose only order_items sit on a cancelled+failed
+     * order (reservation released — CheckoutController::cancel /
+     * CancelExpiredOrders / PaymentController failure fingerprint) must
+     * reconcile to 0, even though order_items exist.
      */
     public function test_reconcile_zeroes_item_with_only_cancelled_orders(): void
     {
@@ -143,5 +151,27 @@ class ReconcileFlashSaleQuotaTest extends TestCase
         $this->artisan('flash-sale:reconcile')->assertExitCode(0);
 
         $this->assertSame(0, $fsItem->fresh()->sold_count);
+    }
+
+    /**
+     * AutoCancelStaleOrders fingerprint: status='cancelled' but
+     * payment_status='paid' (left untouched — it cancels stale paid/processing
+     * orders without releasing the flash reservation, mirroring the Fase 1
+     * voucher rule that paid-order quota stays consumed). The reconcile job
+     * must COUNT these qty toward sold_count, NOT exclude them, because the
+     * "released" fingerprint is specifically status='cancelled' AND
+     * payment_status='failed' — not status='cancelled' alone.
+     */
+    public function test_reconcile_counts_stale_cancelled_paid_order(): void
+    {
+        $variant = $this->makeVariant();
+        $fsItem = $this->makeFlashItem($variant, soldCount: 0); // drifted: stored 0, true should be 5
+
+        $staleCancelledPaidOrder = $this->makeOrder('cancelled', 'paid');
+        $this->makeOrderItem($staleCancelledPaidOrder, $variant, $fsItem, qty: 5);
+
+        $this->artisan('flash-sale:reconcile')->assertExitCode(0);
+
+        $this->assertSame(5, $fsItem->fresh()->sold_count);
     }
 }

@@ -17,18 +17,32 @@ class ReconcileFlashSaleQuota extends Command
      *
      * orders.status enum (database/migrations/2026_05_10_173213_create_orders_table.php):
      *   pending, paid, processing, shipped, ready_for_pickup, completed, cancelled, refunded
-     * There is NO separate "expired" order status — CancelExpiredOrders sets
-     * status='cancelled' (payment_status='failed') on payment-deadline expiry,
-     * same as a customer cancel (CheckoutController::cancel) and a failed/expired
-     * payment webhook (PaymentController). All three call sites that invoke
-     * FlashSaleService::release() land on status='cancelled'. 'refunded' is a
-     * post-completion return outcome — those orders were already fulfilled and
-     * never had their flash reservation released, so they must NOT be excluded.
-     * Pending/paid/processing/etc. all still HOLD their reservation, so they
-     * are intentionally NOT restricted to paid-only.
+     * orders.payment_status enum (database/migrations/2026_05_22_010000_add_payment_fields_to_orders_table.php):
+     *   unpaid, paid, failed, refunded
+     *
+     * status='cancelled' is OVERLOADED and is NOT by itself a reliable "released"
+     * signal — it is reached by two different paths with opposite quota effects:
+     *
+     *   1. Released (must be EXCLUDED): CheckoutController::cancel,
+     *      CancelExpiredOrders, and the PaymentController failure/expiry
+     *      webhook all set status='cancelled' AND payment_status='failed',
+     *      then call FlashSaleService::release(). The reservation is genuinely
+     *      given back.
+     *   2. NOT released (must be COUNTED): AutoCancelStaleOrders cancels stale
+     *      paid/processing orders left unprocessed for 7+ days. It sets
+     *      status='cancelled' but leaves payment_status='paid' (untouched)
+     *      and deliberately does NOT call FlashSaleService::release() — the
+     *      flash unit was genuinely sold; the refund flow handles the money
+     *      side later. This mirrors the Fase 1 voucher rule that paid-order
+     *      promotion quota stays consumed after a stale auto-cancel.
+     *
+     * So the true "released" fingerprint is the pair (status='cancelled' AND
+     * payment_status='failed'), not status='cancelled' alone. Everything else
+     * — including status='cancelled' with payment_status='paid' — still counts.
+     * 'refunded' status is a post-completion return outcome; those orders were
+     * already fulfilled and never had their flash reservation released, so
+     * they are correctly counted too (no special-casing needed).
      */
-    private const RELEASED_STATUSES = ['cancelled'];
-
     public function handle(): int
     {
         $this->info('Starting flash sale quota reconciliation...');
@@ -37,7 +51,10 @@ class ReconcileFlashSaleQuota extends Command
         $trueCounts = DB::table('order_items')
             ->join('orders', 'orders.id', '=', 'order_items.order_id')
             ->whereNotNull('order_items.flash_sale_item_id')
-            ->whereNotIn('orders.status', self::RELEASED_STATUSES)
+            ->whereNot(function ($q) {
+                $q->where('orders.status', 'cancelled')
+                  ->where('orders.payment_status', 'failed');
+            })
             ->select('order_items.flash_sale_item_id', DB::raw('SUM(order_items.quantity) as true_count'))
             ->groupBy('order_items.flash_sale_item_id')
             ->pluck('true_count', 'order_items.flash_sale_item_id');
