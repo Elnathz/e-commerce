@@ -326,4 +326,48 @@ class VoucherCheckoutTest extends TestCase
         $variant->refresh();
         $this->assertSame(0, $variant->reserved_stock);
     }
+
+    /**
+     * Critical review fix (Fase 1 Task 8): CheckoutController::index() reads the
+     * carried-forward voucher code via $request->query('voucher') and previously
+     * called strtoupper() on it directly. Laravel's query() can return an ARRAY
+     * for a crafted URL like ?voucher[]=x, and strtoupper(array) throws an
+     * uncaught TypeError -> HTTP 500, breaking the checkout page entirely.
+     * The guard must coerce any non-string (array/null) to null and only
+     * uppercase a real string, while leaving normal carry-forward intact.
+     */
+    public function test_checkout_index_carries_voucher_query_safely(): void
+    {
+        [$user, $item] = $this->setupCart(100000, 1);
+
+        // Case 1: normal string voucher code is carried forward and uppercased.
+        $this->actingAs($user)->get(route('checkout.index', [
+            'method' => 'pickup',
+            'items' => $item->id,
+            'voucher' => 'disc10',
+        ]))->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Storefront/Checkout')
+            ->where('initialVoucher', 'DISC10')
+        );
+
+        // Case 2 (regression guard): malformed array voucher param must NOT 500.
+        // query('voucher') returns ['x'] here, not a string.
+        $this->actingAs($user)->get(route('checkout.index', [
+            'method' => 'pickup',
+            'items' => $item->id,
+            'voucher' => ['x'],
+        ]))->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Storefront/Checkout')
+            ->where('initialVoucher', null)
+        );
+
+        // Case 3: no voucher param at all -> initialVoucher stays null.
+        $this->actingAs($user)->get(route('checkout.index', [
+            'method' => 'pickup',
+            'items' => $item->id,
+        ]))->assertOk()->assertInertia(fn ($page) => $page
+            ->component('Storefront/Checkout')
+            ->where('initialVoucher', null)
+        );
+    }
 }

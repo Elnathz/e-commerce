@@ -27,7 +27,13 @@ class CheckoutController extends Controller
         // Voucher code carried forward from the Cart page's light voucher field
         // (Task 8 / TDD line 999). Not validated here — Checkout.vue pre-fills
         // and triggers the existing validateVoucher() flow on mount.
-        $voucherCode = $request->query('voucher');
+        // $request->query('voucher') can return a non-string (array/null) for a
+        // crafted URL like ?voucher[]=x — guard before strtoupper() to avoid a
+        // TypeError (uncaught -> HTTP 500) on this page load.
+        $voucherCodeRaw = $request->query('voucher');
+        $initialVoucher = is_string($voucherCodeRaw) && $voucherCodeRaw !== ''
+            ? strtoupper(trim($voucherCodeRaw))
+            : null;
 
         if (!in_array($method, ['delivery', 'pickup'])) {
             return redirect('/cart')->with('error', 'Metode pengiriman tidak valid.');
@@ -106,7 +112,7 @@ class CheckoutController extends Controller
             'totalWeight' => $totalWeight,
             'rajaongkirKeyExists' => !empty(config('services.rajaongkir.key')),
             'itemIds' => $itemIds,
-            'initialVoucher' => $voucherCode ? strtoupper($voucherCode) : null,
+            'initialVoucher' => $initialVoucher,
         ]);
     }
 
