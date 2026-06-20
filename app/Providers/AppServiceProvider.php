@@ -41,6 +41,7 @@ class AppServiceProvider extends ServiceProvider
         
         \App\Models\Review::observe(\App\Observers\ReviewObserver::class);
         \App\Models\Promotion::observe(\App\Observers\PromotionObserver::class);
+        \App\Models\FlashSale::observe(\App\Observers\FlashSaleObserver::class);
 
         \Illuminate\Support\Facades\Event::listen(
             \App\Events\OrderStatusChanged::class,

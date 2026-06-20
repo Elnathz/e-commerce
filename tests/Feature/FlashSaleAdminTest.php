@@ -1,6 +1,7 @@
 <?php
 namespace Tests\Feature;
 
+use App\Models\ActivityLog;
 use App\Models\Category;
 use App\Models\FlashSale;
 use App\Models\FlashSaleItem;
@@ -260,5 +261,71 @@ class FlashSaleAdminTest extends TestCase
 
         $response->assertSessionHasErrors('items');
         $this->assertDatabaseHas('flash_sale_items', ['id' => $item->id, 'product_variant_id' => $variant->id]);
+    }
+
+    public function test_flash_sale_changes_are_audited(): void
+    {
+        $admin = $this->admin();
+        $variant = $this->variant(100000);
+
+        // Create — via the admin route, same as production usage.
+        $this->actingAs($admin)
+            ->post(route('admin.flash-sales.store'), [
+                'name' => 'Flash Sale Audit',
+                'starts_at' => now()->addDay()->format('Y-m-d H:i:s'),
+                'ends_at' => now()->addDays(2)->format('Y-m-d H:i:s'),
+                'is_active' => true,
+                'items' => [
+                    ['product_variant_id' => $variant->id, 'sale_price' => 60000, 'quota' => 10],
+                ],
+            ])
+            ->assertRedirect(route('admin.flash-sales.index'));
+
+        $sale = FlashSale::where('name', 'Flash Sale Audit')->first();
+
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_type' => 'flash_sale',
+            'subject_id' => $sale->id,
+            'actor_type' => 'admin',
+            'actor_id' => $admin->id,
+        ]);
+        $createdLog = ActivityLog::where('subject_type', 'flash_sale')
+            ->where('subject_id', $sale->id)
+            ->first();
+        $this->assertSame('flash_sale.created', $createdLog->type);
+        $this->assertStringContainsString('Flash Sale Audit', $createdLog->description);
+
+        // Update — via the admin route. Pass the existing item's id so the
+        // controller updates it in place instead of inserting a duplicate
+        // (flash_sale_id, product_variant_id) row.
+        $existingItem = $sale->items()->first();
+        $this->actingAs($admin)
+            ->put(route('admin.flash-sales.update', $sale->id), [
+                'name' => 'Flash Sale Audit Updated',
+                'starts_at' => $sale->starts_at->format('Y-m-d H:i:s'),
+                'ends_at' => $sale->ends_at->format('Y-m-d H:i:s'),
+                'is_active' => true,
+                'items' => [
+                    ['id' => $existingItem->id, 'product_variant_id' => $variant->id, 'sale_price' => 50000, 'quota' => 10],
+                ],
+            ])
+            ->assertRedirect(route('admin.flash-sales.index'));
+
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_type' => 'flash_sale',
+            'subject_id' => $sale->id,
+            'type' => 'flash_sale.updated',
+        ]);
+
+        // Delete — sale has no order references yet, so destroy() hard-deletes.
+        $this->actingAs($admin)
+            ->delete(route('admin.flash-sales.destroy', $sale->id))
+            ->assertRedirect(route('admin.flash-sales.index'));
+
+        $this->assertDatabaseHas('activity_logs', [
+            'subject_type' => 'flash_sale',
+            'subject_id' => $sale->id,
+            'type' => 'flash_sale.deleted',
+        ]);
     }
 }
