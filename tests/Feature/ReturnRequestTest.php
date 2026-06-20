@@ -293,4 +293,114 @@ class ReturnRequestTest extends TestCase
         $this->assertCount(1, $returnedOrders);
         $this->assertEquals($this->order->id, $returnedOrders[0]['id']);
     }
+
+    public function test_free_shipping_voucher_does_not_reduce_item_refund(): void
+    {
+        // Order used a free_shipping voucher: discount_amount (15000) reduced SHIPPING, not items.
+        $order = Order::create([
+            'order_number' => 'ORD-TEST-FREESHIP',
+            'user_id' => $this->user->id,
+            'status' => 'completed',
+            'completed_at' => now(),
+            'fulfillment_type' => 'delivery',
+            'subtotal' => 200000,
+            'shipping_cost' => 15000,
+            'discount_amount' => 15000,
+            'discount_on_shipping' => true,
+            'total_amount' => 200000,
+            'payment_method' => 'qris',
+            'payment_status' => 'paid',
+        ]);
+
+        $orderItem = OrderItem::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'product_name_snapshot' => $this->product->name,
+            'variant_name_snapshot' => $this->variant->name,
+            'quantity' => 1,
+            'unit_price' => 100000,
+            'weight_gram' => 500,
+            'subtotal' => 100000,
+        ]);
+
+        $returnRequest = ReturnRequest::create([
+            'return_number' => 'RET-TEST-FREESHIP',
+            'order_id' => $order->id,
+            'user_id' => $this->user->id,
+            'status' => 'received',
+            'reason' => 'Defective product',
+            'evidence_image_1' => 'returns/test.jpg',
+        ]);
+
+        ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.returns.show', $returnRequest->id));
+        $response->assertStatus(200);
+
+        $items = $response->viewData('page')['props']['returnRequest']['items'];
+        $this->assertCount(1, $items);
+        // Ratio must be 0 because the voucher's discount_amount only reduced shipping.
+        $this->assertEquals(100000, $items[0]['suggested_refund']);
+    }
+
+    public function test_percentage_voucher_still_prorates_item_refund(): void
+    {
+        // Counter-case: a NON-free-shipping voucher must still reduce item refund proportionally.
+        $order = Order::create([
+            'order_number' => 'ORD-TEST-PCTVOUCHER',
+            'user_id' => $this->user->id,
+            'status' => 'completed',
+            'completed_at' => now(),
+            'fulfillment_type' => 'delivery',
+            'subtotal' => 200000,
+            'shipping_cost' => 15000,
+            'discount_amount' => 20000,
+            'discount_on_shipping' => false,
+            'total_amount' => 195000,
+            'payment_method' => 'qris',
+            'payment_status' => 'paid',
+        ]);
+
+        $orderItem = OrderItem::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $this->variant->id,
+            'product_name_snapshot' => $this->product->name,
+            'variant_name_snapshot' => $this->variant->name,
+            'quantity' => 1,
+            'unit_price' => 100000,
+            'weight_gram' => 500,
+            'subtotal' => 100000,
+        ]);
+
+        $returnRequest = ReturnRequest::create([
+            'return_number' => 'RET-TEST-PCTVOUCHER',
+            'order_id' => $order->id,
+            'user_id' => $this->user->id,
+            'status' => 'received',
+            'reason' => 'Defective product',
+            'evidence_image_1' => 'returns/test.jpg',
+        ]);
+
+        ReturnRequestItem::create([
+            'return_request_id' => $returnRequest->id,
+            'order_item_id' => $orderItem->id,
+            'quantity' => 1,
+            'reason_code' => 'defective',
+            'condition' => 'opened',
+        ]);
+
+        $response = $this->actingAs($this->admin)->get(route('admin.returns.show', $returnRequest->id));
+        $response->assertStatus(200);
+
+        $items = $response->viewData('page')['props']['returnRequest']['items'];
+        $this->assertCount(1, $items);
+        // discount_ratio = 20000 / 200000 = 0.1 -> refund = 100000 * (1 - 0.1) = 90000
+        $this->assertEquals(90000, $items[0]['suggested_refund']);
+    }
 }

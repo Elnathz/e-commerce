@@ -73,14 +73,15 @@ class ReturnController extends Controller
     /**
      * Hitung refund prorata untuk satu item retur.
      * Scope: hanya discount_amount vs subtotal.
-     * Shipping dan free-shipping voucher tidak masuk hitungan.
+     * Shipping tidak direfund. Jika voucher adalah free_shipping
+     * (discount_on_shipping = true), discount_amount tersebut mengurangi
+     * ongkir, bukan item, sehingga ratio item = 0 (refund item tidak dipotong).
      */
     public function calculateProratedRefund(\App\Models\Order $order, float $itemSubtotal): float
     {
-        if ($order->subtotal <= 0 || $order->discount_amount <= 0) {
-            return round($itemSubtotal, 2);
-        }
-        $discountRatio = min($order->discount_amount / $order->subtotal, 1.0); // cap 1.0 guard
+        $discountRatio = ($order->discount_on_shipping || $order->subtotal <= 0 || $order->discount_amount <= 0)
+            ? 0.0
+            : min($order->discount_amount / $order->subtotal, 1.0);
         return round($itemSubtotal * (1 - $discountRatio), 2);
     }
 
