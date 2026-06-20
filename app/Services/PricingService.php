@@ -1,5 +1,6 @@
 <?php
 namespace App\Services;
+use App\Models\FlashSaleItem;
 use App\Models\ProductVariant;
 use Illuminate\Support\Carbon;
 
@@ -9,7 +10,15 @@ class PricingService {
         $original = (float) $v->price;
         $flashStatus = null;
 
-        // Cabang flash (Fase 2) — placeholder: $item = $this->activeFlashItem($v, $at);
+        $item = $this->activeFlashItem($v, $at);
+        if ($item) {
+            $hasQuotaLeft = $item->quota === null || $item->sold_count < $item->quota;
+            if ((float) $item->sale_price < $original && $hasQuotaLeft) {
+                return $this->info($original, (float) $item->sale_price, 'flash',
+                    optional($item->flashSale)->ends_at?->toISOString(), 'active', $item->id);
+            }
+            if (!$hasQuotaLeft) $flashStatus = 'sold_out';
+        }
 
         if ($v->discount_price !== null && (float) $v->discount_price < $original) {
             return $this->info($original, (float) $v->discount_price, 'manual', null, $flashStatus, null);
@@ -24,6 +33,12 @@ class PricingService {
 
     public function effectivePrice(ProductVariant $v, ?Carbon $at = null): float {
         return $this->priceInfo($v, $at)['effective'];
+    }
+
+    public function activeFlashItem(ProductVariant $v, Carbon $at): ?FlashSaleItem {
+        return FlashSaleItem::where('product_variant_id', $v->id)
+            ->whereHas('flashSale', fn ($q) => $q->activeAt($at))
+            ->with('flashSale')->first();
     }
 
     private function info(float $original, float $eff, string $source, ?string $flashEnds, ?string $flashStatus, ?int $flashItemId): array {
