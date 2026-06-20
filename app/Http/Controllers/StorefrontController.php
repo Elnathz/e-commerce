@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\HeroSlide;
 use App\Models\Product;
+use App\Models\FlashSaleItem;
 
 class StorefrontController extends Controller
 {
@@ -51,7 +52,86 @@ class StorefrontController extends Controller
             'popularCategories' => $popularCategories,
             'banyakDicari' => $banyakDicari,
             'products' => $products,
+            'flashSale' => $this->activeFlashSaleProducts(12),
         ]);
+    }
+
+    /**
+     * Dedicated Flash Sale discovery page — all active flash-sale products.
+     */
+    public function flashSale()
+    {
+        return Inertia::render('Storefront/FlashSale', $this->activeFlashSaleProducts());
+    }
+
+    /**
+     * Active flash-sale products for the storefront showcase + dedicated page.
+     * One (cheapest) flash item per product, sold-out and out-of-window items
+     * excluded. Each product carries `price_display` (resolves to the flash
+     * price) and `flash_quota` ({sold, quota}) for the urgency progress bar.
+     * `ends_at` is the SOONEST-ending active flash window (most urgent countdown).
+     *
+     * @return array{ends_at: ?string, products: \Illuminate\Support\Collection}
+     */
+    private function activeFlashSaleProducts(?int $limit = null): array
+    {
+        $now = now();
+
+        $items = FlashSaleItem::query()
+            ->whereHas('flashSale', fn ($q) => $q->activeAt($now))
+            ->where(fn ($q) => $q->whereNull('quota')->orWhereColumn('sold_count', '<', 'quota'))
+            ->with(['flashSale', 'variant'])
+            ->orderBy('sale_price')
+            ->get()
+            ->filter(fn ($it) => $it->variant && $it->variant->is_active);
+
+        // Cheapest flash item per product (already ordered by sale_price) + soonest end.
+        $endsAt = null;
+        $byProduct = [];
+        foreach ($items as $it) {
+            $productId = $it->variant->product_id;
+            if (isset($byProduct[$productId])) {
+                continue;
+            }
+            $byProduct[$productId] = $it;
+            $end = $it->flashSale?->ends_at;
+            if ($end && ($endsAt === null || $end->lt($endsAt))) {
+                $endsAt = $end;
+            }
+        }
+
+        if (empty($byProduct)) {
+            return ['ends_at' => null, 'products' => collect()];
+        }
+
+        $products = Product::with([
+                'category',
+                'variants' => fn ($q) => $q->where('is_active', true),
+                'images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order'),
+            ])
+            ->whereIn('id', array_keys($byProduct))
+            ->where('is_active', true)
+            ->get()
+            ->map(function ($p) use ($byProduct) {
+                $p->setAppends(['price_display']);
+                $it = $byProduct[$p->id];
+                $p->flash_quota = [
+                    'sold' => (int) $it->sold_count,
+                    'quota' => $it->quota !== null ? (int) $it->quota : null,
+                ];
+                return $p;
+            })
+            ->sortBy(fn ($p) => (float) $byProduct[$p->id]->sale_price)
+            ->values();
+
+        if ($limit) {
+            $products = $products->take($limit)->values();
+        }
+
+        return [
+            'ends_at' => $endsAt?->toISOString(),
+            'products' => $products,
+        ];
     }
 
     /** Gambar (image_path relatif) dari produk aktif pertama yang punya gambar di kategori-kategori ini. */

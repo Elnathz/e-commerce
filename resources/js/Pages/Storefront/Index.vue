@@ -4,6 +4,7 @@ import ProductCard from '@/Components/Storefront/ProductCard.vue';
 import HeroCarousel from '@/Components/Storefront/HeroCarousel.vue';
 import BannerImage from '@/Components/Storefront/BannerImage.vue';
 import ImageTileCard from '@/Components/Storefront/ImageTileCard.vue';
+import FlashSaleSection from '@/Components/Storefront/FlashSaleSection.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
 defineProps({
@@ -12,6 +13,7 @@ defineProps({
     popularCategories: { type: Array, default: () => [] },
     banyakDicari: { type: Array, default: () => [] },
     products: { type: Array, default: () => [] },
+    flashSale: { type: Object, default: () => ({ ends_at: null, products: [] }) },
 });
 </script>
 
@@ -42,6 +44,9 @@ defineProps({
                     </div>
                 </div>
             </section>
+
+            <!-- FLASH SALE -->
+            <FlashSaleSection :ends-at="flashSale.ends_at" :products="flashSale.products" />
 
             <!-- KATEGORI POPULER -->
             <section v-if="popularCategories.length">

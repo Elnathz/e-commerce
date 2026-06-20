@@ -11,6 +11,7 @@ use App\Http\Controllers\PaymentController;
 
 Route::get('/', [StorefrontController::class, 'index'])->name('home');
 Route::get('/search', [StorefrontController::class, 'search'])->name('search');
+Route::get('/flash-sale', [StorefrontController::class, 'flashSale'])->name('flash-sale.index');
 Route::get('/products/{slug}', [StorefrontController::class, 'show'])->name('products.show');
 
 // Cart routes (accessible by both guests and authenticated users)

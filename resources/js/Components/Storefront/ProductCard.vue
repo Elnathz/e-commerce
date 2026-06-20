@@ -1,4 +1,5 @@
 <script setup>
+import { computed } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import PriceTag from '@/Components/Storefront/PriceTag.vue';
 
@@ -7,6 +8,31 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    // Optional flash-sale urgency meta: { sold, quota }. quota null = unlimited.
+    // Only rendered when the resolved price is actually a flash price.
+    flashQuota: {
+        type: Object,
+        default: null,
+    },
+});
+
+const showFlashQuota = computed(
+    () => props.flashQuota && props.product.price_display?.source === 'flash'
+);
+
+// Progress fill: ratio sold/quota (capped 100%); unlimited quota shows a full
+// track behind the "terjual" label rather than a misleading partial fill.
+const quotaPct = computed(() => {
+    const fq = props.flashQuota;
+    if (!fq || fq.quota === null || fq.quota === undefined || fq.quota <= 0) return 100;
+    return Math.min(100, Math.round((fq.sold / fq.quota) * 100));
+});
+
+const quotaLabel = computed(() => {
+    const fq = props.flashQuota;
+    if (!fq) return '';
+    if (fq.quota === null || fq.quota === undefined) return `${fq.sold} terjual`;
+    return fq.sold >= fq.quota ? 'Habis' : `Terjual ${fq.sold}`;
 });
 
 // Helper to get the primary or first image
@@ -69,10 +95,23 @@ const getTotalStock = (product) => {
             </div>
 
             <!-- Price and Stock -->
-            <div class="mt-auto pt-1 flex justify-between items-end">
+            <div class="mt-auto pt-1 flex justify-between items-end gap-1.5">
                 <PriceTag :info="product.price_display" />
                 <div class="text-[11px] text-gray-500 mb-0.5 text-right whitespace-nowrap">
                     Sisa: <span class="font-medium" :class="{'text-red-600': getTotalStock(product) <= 5}">{{ getTotalStock(product) }}</span>
+                </div>
+            </div>
+
+            <!-- Flash Sale quota progress (urgency) -->
+            <div v-if="showFlashQuota" class="mt-2">
+                <div class="relative h-4 rounded-full bg-orange-100 overflow-hidden">
+                    <div
+                        class="absolute inset-y-0 left-0 bg-gradient-to-r from-orange-500 to-red-500 rounded-full transition-[width] duration-300"
+                        :style="{ width: quotaPct + '%' }"
+                    ></div>
+                    <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white tabular-nums">
+                        {{ quotaLabel }}
+                    </span>
                 </div>
             </div>
         </div>
