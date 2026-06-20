@@ -82,6 +82,34 @@ class FlashSaleStorefrontTest extends TestCase
         $this->get('/')->assertInertia(fn ($p) => $p->where('flashSale.products', []));
     }
 
+    public function test_product_with_cheaper_nonflash_variant_excluded(): void
+    {
+        // Product whose flash is on the expensive variant (200000 -> sale 150000),
+        // but it also has a cheaper non-flash variant (50000). price_display resolves
+        // to the 50000 variant (source 'none'), so the card would look non-flash in
+        // the rail -> it must be excluded.
+        $cat = Category::create(['name' => 'C', 'slug' => 'c-' . uniqid()]);
+        $product = Product::create([
+            'category_id' => $cat->id, 'name' => 'Multi ' . uniqid(), 'slug' => 'm-' . uniqid(),
+            'description' => 'd', 'base_price' => 200000, 'weight_gram' => 100, 'is_active' => true,
+        ]);
+        $flashVariant = ProductVariant::create([
+            'product_id' => $product->id, 'sku' => 'big-' . uniqid(), 'name' => 'Besar',
+            'price' => 200000, 'stock' => 10, 'reserved_stock' => 0, 'is_active' => true,
+        ]);
+        ProductVariant::create([
+            'product_id' => $product->id, 'sku' => 'small-' . uniqid(), 'name' => 'Kecil',
+            'price' => 50000, 'stock' => 10, 'reserved_stock' => 0, 'is_active' => true,
+        ]);
+        $sale = FlashSale::create(['name' => 'FS', 'starts_at' => now()->subMinute(), 'ends_at' => now()->addHour(), 'is_active' => true]);
+        FlashSaleItem::create(['flash_sale_id' => $sale->id, 'product_variant_id' => $flashVariant->id, 'sale_price' => 150000, 'quota' => null, 'sold_count' => 0]);
+
+        $this->get('/')->assertInertia(fn ($p) => $p
+            ->where('flashSale.products', [])
+            ->where('flashSale.ends_at', null)
+        );
+    }
+
     public function test_flash_sale_page_lists_active_products(): void
     {
         $product = $this->product(100000);

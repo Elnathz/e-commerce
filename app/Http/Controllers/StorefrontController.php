@@ -85,18 +85,12 @@ class StorefrontController extends Controller
             ->get()
             ->filter(fn ($it) => $it->variant && $it->variant->is_active);
 
-        // Cheapest flash item per product (already ordered by sale_price) + soonest end.
-        $endsAt = null;
+        // Cheapest flash item per product (items already ordered by sale_price).
         $byProduct = [];
         foreach ($items as $it) {
             $productId = $it->variant->product_id;
-            if (isset($byProduct[$productId])) {
-                continue;
-            }
-            $byProduct[$productId] = $it;
-            $end = $it->flashSale?->ends_at;
-            if ($end && ($endsAt === null || $end->lt($endsAt))) {
-                $endsAt = $end;
+            if (!isset($byProduct[$productId])) {
+                $byProduct[$productId] = $it;
             }
         }
 
@@ -121,12 +115,23 @@ class StorefrontController extends Controller
                 ];
                 return $p;
             })
+            // Only surface cards whose RESOLVED price is actually the flash price.
+            // A multi-variant product can have a cheaper non-flash variant, which
+            // price_display would pick — that card would look non-flash inside the
+            // Flash Sale rail, so drop it rather than mislead.
+            ->filter(fn ($p) => ($p->price_display['source'] ?? null) === 'flash')
             ->sortBy(fn ($p) => (float) $byProduct[$p->id]->sale_price)
             ->values();
 
         if ($limit) {
             $products = $products->take($limit)->values();
         }
+
+        // Soonest-ending window among the products actually shown (most urgent countdown).
+        $endsAt = $products->reduce(function ($carry, $p) use ($byProduct) {
+            $end = optional($byProduct[$p->id]->flashSale)->ends_at;
+            return ($end && ($carry === null || $end->lt($carry))) ? $end : $carry;
+        }, null);
 
         return [
             'ends_at' => $endsAt?->toISOString(),
