@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import FlashCountdown from '@/Components/Storefront/FlashCountdown.vue';
 
 const props = defineProps({
   info: { type: Object, required: true },
@@ -33,6 +34,15 @@ const sizeClasses = computed(() => SIZE_CLASSES[props.size] || SIZE_CLASSES.sm);
       <span :class="['text-gray-400 line-through tabular-nums', sizeClasses.original]">{{ fmt(info.original) }}</span>
       <span :class="['font-bold text-red-500 bg-red-50 px-1.5 py-0.5 rounded', sizeClasses.badge]">−{{ info.discount_percent }}%</span>
     </div>
-    <!-- cabang 'flash' ditambah Fase 2 -->
+    <div v-else-if="info.source === 'flash'" class="mt-0.5">
+      <div class="flex items-center gap-1.5">
+        <span :class="['font-bold text-white bg-red-600 px-1.5 py-0.5 rounded uppercase tracking-wide', sizeClasses.badge]">Flash Sale</span>
+        <FlashCountdown v-if="info.flash_ends_at" :ends-at="info.flash_ends_at" />
+      </div>
+      <span :class="['text-gray-400 line-through tabular-nums block mt-0.5', sizeClasses.original]">{{ fmt(info.original) }}</span>
+    </div>
+    <div v-else-if="info.flash_status === 'sold_out'" class="mt-0.5">
+      <span :class="['font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded uppercase tracking-wide', sizeClasses.badge]">Flash Sale Habis</span>
+    </div>
   </div>
 </template>
