@@ -195,13 +195,51 @@ class CheckoutController extends Controller
 
                 // --- Resolve effective price per item + placement guard (price_changed) ---
                 // Backward-compatible: guard only runs when caller sends consented_prices.
+                //
+                // Fase 2 Task 5: for items currently priced via an active Flash Sale
+                // (priceInfo()['source'] === 'flash'), this loop ALSO reserves flash
+                // quota atomically — lockForUpdate() the FlashSaleItem row and
+                // re-validate it is STILL active/in-stock under the lock. If it just
+                // expired or just sold out (race with a concurrent checkout), the
+                // item is folded into $priceChanged so the SAME existing mechanism
+                // throws and rolls back the whole transaction (stock + voucher +
+                // flash quota together) — no separate error path needed.
                 $pricing = app(\App\Services\PricingService::class);
                 $priceChanged = [];
                 $effectiveById = [];
+                $flashItemIdByCart = [];
                 $consentMap = $request->input('consented_prices', []);
                 foreach ($cartItems as $item) {
-                    $eff = $pricing->effectivePrice($item->variant);
+                    $info = $pricing->priceInfo($item->variant);
+                    $eff = $info['effective'];
                     $effectiveById[$item->id] = $eff;
+
+                    if ($info['source'] === 'flash' && $info['flash_sale_item_id']) {
+                        $fsItem = \App\Models\FlashSaleItem::with('flashSale')
+                            ->lockForUpdate()
+                            ->find($info['flash_sale_item_id']);
+
+                        $stillActive = $fsItem
+                            && optional($fsItem->flashSale)->is_active
+                            && now()->gte($fsItem->flashSale->starts_at)
+                            && now()->lt($fsItem->flashSale->ends_at);
+                        $hasQuota = $fsItem && ($fsItem->quota === null || $fsItem->sold_count < $fsItem->quota);
+
+                        if (!$stillActive || !$hasQuota) {
+                            // Expired mid-checkout OR sold out under the lock — unify
+                            // with the standard price_changed UX below.
+                            $priceChanged[] = $item->variant->product->name . ' (' . $item->variant->name . ')';
+                        } else {
+                            // ALWAYS increment sold_count for every valid flash reservation
+                            // (not just quota'd ones) — sold_count tracks all flash sales,
+                            // matching FlashSaleService::reserve()'s unconditional increment
+                            // and the nightly count-all reconcile. The quota CHECK above is
+                            // the only thing gated on quota !== null.
+                            $fsItem->increment('sold_count', $item->quantity);
+                            $flashItemIdByCart[$item->id] = $fsItem->id;
+                        }
+                    }
+
                     if ($request->filled('consented_prices')) {
                         if (!array_key_exists((int) $item->id, $consentMap) || (float) $consentMap[(int) $item->id] !== (float) $eff) {
                             $priceChanged[] = $item->variant->product->name . ' (' . $item->variant->name . ')';
@@ -264,6 +302,7 @@ class CheckoutController extends Controller
                     OrderItem::create([
                         'order_id' => $order->id,
                         'product_variant_id' => $variant->id,
+                        'flash_sale_item_id' => $flashItemIdByCart[$item->id] ?? null,
                         'product_name_snapshot' => $product->name,
                         'variant_name_snapshot' => $variant->name,
                         'quantity' => $item->quantity,
@@ -286,7 +325,9 @@ class CheckoutController extends Controller
                     $code = strtoupper($request->voucher_code);
                     $promo = \App\Models\Promotion::where('code', $code)->firstOrFail();
                     $courierType = $this->resolveCourierType($request);
-                    $containsFlash = false; // Fase 2 menghitung dari item flash
+                    // Fase 2: derived from items actually reserved against a flash
+                    // item above — activates the voucher x flash eligibility gate.
+                    $containsFlash = !empty($flashItemIdByCart);
 
                     $usage = app(\App\Services\PromotionService::class)->reserve(
                         $code,
