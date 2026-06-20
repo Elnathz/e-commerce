@@ -26,6 +26,13 @@ const showAddressModal = ref(false);
 const isPlacingOrder = ref(false);
 const orderError = ref('');
 
+// Voucher state
+const voucherInput = ref('');
+const isValidatingVoucher = ref(false);
+const voucherMessage = ref('');
+const voucherMessageType = ref(''); // 'success' | 'error'
+const appliedVoucher = ref(null); // { code, discount_amount }
+
 // Map of cart_item_id => price the customer saw on this page (effective price
 // sent by CheckoutController::index()). Submitted back on order placement so the
 // server-side placement guard in CheckoutController::store() can detect stale prices.
@@ -46,7 +53,8 @@ const form = useForm({
     shipping_cost: 0,
     notes: '',
     item_ids: props.itemIds || '',
-    consented_prices: consentedPrices.value
+    consented_prices: consentedPrices.value,
+    voucher_code: null
 });
 
 // Format currency
@@ -54,8 +62,12 @@ const formatPrice = (price) => {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(price);
 };
 
+const discountAmount = computed(() => {
+    return appliedVoucher.value ? appliedVoucher.value.discount_amount : 0;
+});
+
 const totalAmount = computed(() => {
-    return props.subtotal + shippingCost.value;
+    return Math.max(0, props.subtotal + shippingCost.value - discountAmount.value);
 });
 
 const selectedAddress = computed(() => {
@@ -136,6 +148,62 @@ const selectShippingOption = (option) => {
     form.courier = selectedCourier.value;
     form.shipping_service = option.service;
     form.shipping_cost = option.cost[0].value;
+
+    // Shipping cost/courier changed — re-validate an already-applied voucher so the
+    // displayed discount (e.g. free_shipping scoped to a courier type) stays accurate.
+    if (appliedVoucher.value) {
+        applyVoucher();
+    }
+};
+
+const applyVoucher = async () => {
+    const code = (voucherInput.value || (appliedVoucher.value ? appliedVoucher.value.code : '')).trim();
+    if (!code) {
+        voucherMessage.value = 'Masukkan kode voucher.';
+        voucherMessageType.value = 'error';
+        return;
+    }
+
+    isValidatingVoucher.value = true;
+    voucherMessage.value = '';
+    voucherMessageType.value = '';
+
+    try {
+        const response = await axios.post(route('promotions.validate'), {
+            code,
+            item_ids: props.itemIds || '',
+            method: props.method,
+            courier: form.courier,
+            shipping_cost: shippingCost.value
+        });
+
+        if (response.data.valid) {
+            appliedVoucher.value = { code: response.data.code || code.toUpperCase(), discount_amount: response.data.discount_amount || 0 };
+            form.voucher_code = appliedVoucher.value.code;
+            voucherMessage.value = response.data.message || 'Voucher berhasil diterapkan.';
+            voucherMessageType.value = 'success';
+        } else {
+            appliedVoucher.value = null;
+            form.voucher_code = null;
+            voucherMessage.value = response.data.message || 'Voucher tidak valid.';
+            voucherMessageType.value = 'error';
+        }
+    } catch (error) {
+        appliedVoucher.value = null;
+        form.voucher_code = null;
+        voucherMessage.value = error.response?.data?.message || 'Gagal memvalidasi voucher.';
+        voucherMessageType.value = 'error';
+    } finally {
+        isValidatingVoucher.value = false;
+    }
+};
+
+const clearVoucher = () => {
+    appliedVoucher.value = null;
+    form.voucher_code = null;
+    voucherInput.value = '';
+    voucherMessage.value = '';
+    voucherMessageType.value = '';
 };
 
 const placeOrder = () => {
@@ -346,6 +414,43 @@ const onAddressSaved = () => {
                                 </div>
                             </div>
 
+                            <!-- Voucher Input -->
+                            <div class="border-t border-gray-100 pt-4 mb-2">
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Kode Voucher</label>
+
+                                <div v-if="!appliedVoucher" class="flex gap-2">
+                                    <input
+                                        v-model="voucherInput"
+                                        type="text"
+                                        placeholder="Masukkan kode voucher"
+                                        :disabled="isValidatingVoucher"
+                                        @keyup.enter="applyVoucher"
+                                        class="flex-1 px-4 py-2.5 rounded-xl bg-gray-50 border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-600 transition-all font-medium text-gray-900 text-sm uppercase disabled:opacity-50"
+                                    >
+                                    <button
+                                        type="button"
+                                        @click="applyVoucher"
+                                        :disabled="isValidatingVoucher || !voucherInput.trim()"
+                                        class="px-4 py-2.5 rounded-xl text-sm font-bold bg-gray-900 text-white hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shrink-0"
+                                    >
+                                        <svg v-if="isValidatingVoucher" class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                        <span>{{ isValidatingVoucher ? 'Memeriksa...' : 'Terapkan' }}</span>
+                                    </button>
+                                </div>
+
+                                <div v-else class="flex items-center justify-between gap-2 p-3 rounded-xl bg-green-50 border border-green-200">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5 text-green-600 flex-shrink-0"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+                                        <span class="text-sm font-bold text-green-800 truncate">{{ appliedVoucher.code }}</span>
+                                    </div>
+                                    <button type="button" @click="clearVoucher" class="text-xs font-semibold text-green-700 hover:text-red-600 underline shrink-0">Hapus</button>
+                                </div>
+
+                                <p v-if="voucherMessage" class="text-xs font-semibold mt-2" :class="voucherMessageType === 'success' ? 'text-green-600' : 'text-red-500'">
+                                    {{ voucherMessage }}
+                                </p>
+                            </div>
+
                             <div class="border-t border-gray-100 pt-4 space-y-3 mb-6">
                                 <div class="flex justify-between text-sm">
                                     <span class="text-gray-500">Total Harga ({{ cartItems.length }} barang)</span>
@@ -358,6 +463,10 @@ const onAddressSaved = () => {
                                 <div v-if="method === 'delivery'" class="flex justify-between text-sm">
                                     <span class="text-gray-500">Ongkos Kirim</span>
                                     <span class="font-semibold text-gray-900">{{ shippingCost > 0 ? formatPrice(shippingCost) : '-' }}</span>
+                                </div>
+                                <div v-if="appliedVoucher" class="flex justify-between text-sm">
+                                    <span class="text-gray-500">Diskon</span>
+                                    <span class="font-semibold text-green-600">-{{ formatPrice(discountAmount) }}</span>
                                 </div>
                             </div>
 
