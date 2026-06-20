@@ -7,6 +7,7 @@ use App\Models\FlashSaleItem;
 use App\Models\Product;
 use App\Services\FlashSaleService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
@@ -45,21 +46,23 @@ class FlashSaleController extends Controller
 
         $this->guardItems($data['items'], $data['starts_at'], $data['ends_at'], null);
 
-        $sale = FlashSale::create([
-            'name' => $data['name'],
-            'starts_at' => $data['starts_at'],
-            'ends_at' => $data['ends_at'],
-            'is_active' => $data['is_active'] ?? true,
-        ]);
-
-        foreach ($data['items'] as $item) {
-            FlashSaleItem::create([
-                'flash_sale_id' => $sale->id,
-                'product_variant_id' => $item['product_variant_id'],
-                'sale_price' => $item['sale_price'],
-                'quota' => $item['quota'] ?? null,
+        DB::transaction(function () use ($data) {
+            $sale = FlashSale::create([
+                'name' => $data['name'],
+                'starts_at' => $data['starts_at'],
+                'ends_at' => $data['ends_at'],
+                'is_active' => $data['is_active'] ?? true,
             ]);
-        }
+
+            foreach ($data['items'] as $item) {
+                FlashSaleItem::create([
+                    'flash_sale_id' => $sale->id,
+                    'product_variant_id' => $item['product_variant_id'],
+                    'sale_price' => $item['sale_price'],
+                    'quota' => $item['quota'] ?? null,
+                ]);
+            }
+        });
 
         return redirect()->route('admin.flash-sales.index')->with('success', 'Flash Sale ditambahkan.');
     }
@@ -106,33 +109,35 @@ class FlashSaleController extends Controller
             }
         }
 
-        $flashSale->update([
-            'name' => $data['name'],
-            'starts_at' => $data['starts_at'],
-            'ends_at' => $data['ends_at'],
-            'is_active' => $data['is_active'] ?? true,
-        ]);
+        DB::transaction(function () use ($flashSale, $data, $existingIds, $removedIds) {
+            $flashSale->update([
+                'name' => $data['name'],
+                'starts_at' => $data['starts_at'],
+                'ends_at' => $data['ends_at'],
+                'is_active' => $data['is_active'] ?? true,
+            ]);
 
-        foreach ($data['items'] as $item) {
-            if (! empty($item['id']) && in_array((int) $item['id'], $existingIds, true)) {
-                $flashSale->items()->where('id', $item['id'])->update([
-                    'product_variant_id' => $item['product_variant_id'],
-                    'sale_price' => $item['sale_price'],
-                    'quota' => $item['quota'] ?? null,
-                ]);
-            } else {
-                FlashSaleItem::create([
-                    'flash_sale_id' => $flashSale->id,
-                    'product_variant_id' => $item['product_variant_id'],
-                    'sale_price' => $item['sale_price'],
-                    'quota' => $item['quota'] ?? null,
-                ]);
+            foreach ($data['items'] as $item) {
+                if (! empty($item['id']) && in_array((int) $item['id'], $existingIds, true)) {
+                    $flashSale->items()->where('id', $item['id'])->update([
+                        'product_variant_id' => $item['product_variant_id'],
+                        'sale_price' => $item['sale_price'],
+                        'quota' => $item['quota'] ?? null,
+                    ]);
+                } else {
+                    FlashSaleItem::create([
+                        'flash_sale_id' => $flashSale->id,
+                        'product_variant_id' => $item['product_variant_id'],
+                        'sale_price' => $item['sale_price'],
+                        'quota' => $item['quota'] ?? null,
+                    ]);
+                }
             }
-        }
 
-        if (! empty($removedIds)) {
-            FlashSaleItem::whereIn('id', $removedIds)->delete();
-        }
+            if (! empty($removedIds)) {
+                FlashSaleItem::whereIn('id', $removedIds)->delete();
+            }
+        });
 
         return redirect()->route('admin.flash-sales.index')->with('success', 'Flash Sale diperbarui.');
     }

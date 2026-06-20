@@ -417,6 +417,17 @@ class CheckoutController extends Controller
                 // Lock the order row
                 $order = Order::where('id', $order->id)->lockForUpdate()->first();
 
+                // Re-check under the lock: the pre-lock canBeCancelled() check above
+                // can be stale under concurrent requests (e.g. two near-simultaneous
+                // cancel clicks, or a cancel racing a webhook). Without this guard,
+                // FlashSaleService::release()/PromotionService::release() are NOT
+                // idempotent and would double-decrement quota on a second pass.
+                // Mirrors the re-check already done in CancelExpiredOrders and
+                // PaymentController's payment-failure path.
+                if ($order->status !== 'pending' || $order->payment_status === 'paid') {
+                    return;
+                }
+
                 // Release reserved stock
                 foreach ($order->items as $item) {
                     ProductVariant::where('id', $item->product_variant_id)

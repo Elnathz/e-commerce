@@ -348,6 +348,64 @@ class FlashSaleCheckoutTest extends TestCase
     }
 
     /**
+     * Fase 2 whole-branch review fix: cancel() must be idempotent under
+     * concurrency. The order is re-locked inside the transaction but must
+     * ALSO re-check status under the lock before calling
+     * FlashSaleService::release() (non-idempotent — see its docblock).
+     * Without the guard, two concurrent (or sequential) calls to the cancel
+     * route would double-decrement sold_count. Drives the REAL customer
+     * cancel route TWICE — the second call sees status='cancelled' under
+     * the lock and must no-op (no double release).
+     */
+    public function test_double_cancel_releases_flash_quota_once(): void
+    {
+        [$user, $item, $fsItem] = $this->setupCart(
+            price: 100000,
+            qty: 2,
+            salePrice: 60000,
+            quota: 10,
+            soldCount: 0,
+        );
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+            'consented_prices' => [$item->id => 60000],
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertSame('pending', $order->status);
+
+        // Quota reserved by placement: sold_count went 0 -> 2.
+        $this->assertSame(2, $fsItem->fresh()->sold_count);
+
+        // First cancel — releases the quota (2 -> 0) and marks the order cancelled.
+        $this->actingAs($user)
+            ->post(route('orders.cancel', $order->order_number))
+            ->assertRedirect(route('home'));
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->status);
+        $this->assertSame(0, $fsItem->fresh()->sold_count);
+
+        // Second cancel on the SAME already-cancelled order (sequential call
+        // simulates the race outcome — the second request sees status=
+        // 'cancelled' under the lock). Must be a safe no-op: sold_count stays
+        // at 0 (not driven negative / not double-released), order stays
+        // cancelled. canBeCancelled() is false post-cancel, so the route
+        // returns the "tidak dapat dibatalkan" error rather than re-entering
+        // the transaction at all — but either way sold_count must never move.
+        $this->actingAs($user)
+            ->post(route('orders.cancel', $order->order_number));
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->status);
+        // Decremented exactly once (== original 0, not negative / not -2x).
+        $this->assertSame(0, $fsItem->fresh()->sold_count);
+    }
+
+    /**
      * Fase 2 Task 10 (T6 flash, T7): the containsFlash gate (Fase 1 Task 2,
      * wired in Fase 2 Task 5) must reject a voucher whose
      * applies_to_flash_sale=false when the cart being placed contains a

@@ -20,19 +20,42 @@ class PricingService {
             if (!$hasQuotaLeft) $flashStatus = 'sold_out';
         }
 
-        if ($v->discount_price !== null && (float) $v->discount_price < $original) {
-            return $this->info($original, (float) $v->discount_price, 'manual', null, $flashStatus, null);
-        }
-        $pct = (float) ($v->product->discount_percent ?? 0);
-        if ($pct > 0) {
-            $eff = round($original * (1 - $pct / 100), 2);
-            if ($eff < $original) return $this->info($original, $eff, 'manual', null, $flashStatus, null);
+        $manualEff = $this->manualEffectivePrice($v);
+        if ($manualEff < $original) {
+            return $this->info($original, $manualEff, 'manual', null, $flashStatus, null);
         }
         return $this->info($original, $original, 'none', null, $flashStatus, null);
     }
 
     public function effectivePrice(ProductVariant $v, ?Carbon $at = null): float {
         return $this->priceInfo($v, $at)['effective'];
+    }
+
+    /**
+     * Manual-only effective price, ignoring Flash Sale entirely. Precedence:
+     * discount_price override (if it strictly lowers price) takes priority
+     * over the product-level discount_percent; otherwise falls back to the
+     * original price. Single source of truth — also used by
+     * FlashSaleService::assertSalePriceValid() to validate a proposed flash
+     * sale_price against whatever manual discount is currently active, so
+     * the two can never drift out of sync.
+     */
+    public function manualEffectivePrice(ProductVariant $v): float {
+        $original = (float) $v->price;
+
+        if ($v->discount_price !== null && (float) $v->discount_price < $original) {
+            return (float) $v->discount_price;
+        }
+
+        $pct = (float) ($v->product->discount_percent ?? 0);
+        if ($pct > 0) {
+            $eff = round($original * (1 - $pct / 100), 2);
+            if ($eff < $original) {
+                return $eff;
+            }
+        }
+
+        return $original;
     }
 
     public function activeFlashItem(ProductVariant $v, Carbon $at): ?FlashSaleItem {
