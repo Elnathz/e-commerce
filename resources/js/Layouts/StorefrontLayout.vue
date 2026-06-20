@@ -6,6 +6,7 @@ import DropdownLink from '@/Components/DropdownLink.vue';
 import CartDrawer from '@/Components/Storefront/CartDrawer.vue';
 import ShoppingMethodDrawer from '@/Components/Storefront/ShoppingMethodDrawer.vue';
 import CategoryMegaMenu from '@/Components/Storefront/CategoryMegaMenu.vue';
+import BoltIcon from '@/Components/Storefront/Icons/BoltIcon.vue';
 import { Link, router, usePage } from '@inertiajs/vue3';
 
 const showingMobileMenu = ref(false);
@@ -128,8 +129,17 @@ watch(() => page.props.flash?.cart_error, (msg) => {
                     </div>
 
                     <!-- Kategori mega-menu (desktop) -->
-                    <div class="hidden md:block shrink-0 ml-2">
+                    <div class="hidden md:flex items-center gap-2 shrink-0 ml-2">
                         <CategoryMegaMenu />
+                        <Link
+                            href="/flash-sale"
+                            class="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600 hover:text-red-700 transition-colors"
+                        >
+                            <span class="grid place-items-center w-5 h-5 rounded bg-red-600">
+                                <BoltIcon class="w-3 h-3 text-white" />
+                            </span>
+                            Flash Sale
+                        </Link>
                     </div>
 
                     <!-- Center: Search Bar -->
@@ -218,6 +228,16 @@ watch(() => page.props.flash?.cart_error, (msg) => {
 
         <!-- Mobile Menu (Toggleable) -->
         <div v-if="showingMobileMenu" class="md:hidden bg-white border-b border-gray-200 px-4 py-2 max-h-[70vh] overflow-y-auto shadow-inner">
+            <Link
+                href="/flash-sale"
+                class="flex items-center gap-2 py-2.5 border-b border-gray-50 font-semibold text-sm text-red-600"
+                @click="showingMobileMenu = false"
+            >
+                <span class="grid place-items-center w-5 h-5 rounded bg-red-600">
+                    <BoltIcon class="w-3 h-3 text-white" />
+                </span>
+                Flash Sale
+            </Link>
             <template v-for="parent in page.props.globalCategories" :key="parent.id">
                 <div class="py-2 border-b border-gray-50 last:border-0">
                     <div class="font-semibold text-sm text-gray-800">{{ parent.name }}</div>
