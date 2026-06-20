@@ -81,15 +81,37 @@ class FlashSaleController extends Controller
         $this->guardItems($data['items'], $data['starts_at'], $data['ends_at'], $flashSale);
         $this->guardActiveEdit($flashSale, $data);
 
+        $existingIds = $flashSale->items()->pluck('id')->all();
+        $submittedIds = [];
+        foreach ($data['items'] as $item) {
+            if (! empty($item['id']) && in_array((int) $item['id'], $existingIds, true)) {
+                $submittedIds[] = (int) $item['id'];
+            }
+        }
+
+        // Items dropped from the submitted payload but referenced by an order_item must not
+        // be removed from the sale: doing so would silently keep charging the flash price on
+        // an order the admin believes was excluded. Abort the WHOLE update before any writes —
+        // partially applying name/window/other-item changes while rejecting the removal would
+        // leave the sale in a state the admin didn't ask for.
+        $removedIds = array_diff($existingIds, $submittedIds);
+        if (! empty($removedIds)) {
+            $referenced = \App\Models\OrderItem::whereIn('flash_sale_item_id', $removedIds)
+                ->pluck('flash_sale_item_id')->unique()->all();
+
+            if (! empty($referenced)) {
+                throw ValidationException::withMessages([
+                    'items' => 'Varian yang sudah ada di pesanan tidak bisa dihapus dari Flash Sale yang berjalan. Untuk menghentikannya, akhiri (hapus) seluruh Flash Sale ini.',
+                ]);
+            }
+        }
+
         $flashSale->update([
             'name' => $data['name'],
             'starts_at' => $data['starts_at'],
             'ends_at' => $data['ends_at'],
             'is_active' => $data['is_active'] ?? true,
         ]);
-
-        $existingIds = $flashSale->items()->pluck('id')->all();
-        $keptIds = [];
 
         foreach ($data['items'] as $item) {
             if (! empty($item['id']) && in_array((int) $item['id'], $existingIds, true)) {
@@ -98,27 +120,18 @@ class FlashSaleController extends Controller
                     'sale_price' => $item['sale_price'],
                     'quota' => $item['quota'] ?? null,
                 ]);
-                $keptIds[] = (int) $item['id'];
             } else {
-                $created = FlashSaleItem::create([
+                FlashSaleItem::create([
                     'flash_sale_id' => $flashSale->id,
                     'product_variant_id' => $item['product_variant_id'],
                     'sale_price' => $item['sale_price'],
                     'quota' => $item['quota'] ?? null,
                 ]);
-                $keptIds[] = $created->id;
             }
         }
 
-        $removedIds = array_diff($existingIds, $keptIds);
         if (! empty($removedIds)) {
-            // Items referenced by an order_item must not be hard-deleted (would break order history FK).
-            $referenced = \App\Models\OrderItem::whereIn('flash_sale_item_id', $removedIds)
-                ->pluck('flash_sale_item_id')->unique()->all();
-            $deletable = array_diff($removedIds, $referenced);
-            if (! empty($deletable)) {
-                FlashSaleItem::whereIn('id', $deletable)->delete();
-            }
+            FlashSaleItem::whereIn('id', $removedIds)->delete();
         }
 
         return redirect()->route('admin.flash-sales.index')->with('success', 'Flash Sale diperbarui.');
@@ -185,7 +198,7 @@ class FlashSaleController extends Controller
             'is_active' => 'boolean',
             'items' => 'required|array|min:1',
             'items.*.id' => 'nullable|integer',
-            'items.*.product_variant_id' => 'required|integer|exists:product_variants,id',
+            'items.*.product_variant_id' => 'required|integer|exists:product_variants,id|distinct',
             'items.*.sale_price' => 'required|numeric|min:0',
             'items.*.quota' => 'nullable|integer|min:0',
         ]);

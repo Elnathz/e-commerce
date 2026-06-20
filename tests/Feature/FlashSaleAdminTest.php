@@ -4,6 +4,8 @@ namespace Tests\Feature;
 use App\Models\Category;
 use App\Models\FlashSale;
 use App\Models\FlashSaleItem;
+use App\Models\Order;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\User;
@@ -145,5 +147,118 @@ class FlashSaleAdminTest extends TestCase
 
         $response->assertSessionHasErrors();
         $this->assertDatabaseHas('flash_sale_items', ['id' => $item->id, 'sale_price' => 50000]);
+    }
+
+    public function test_non_admin_cannot_access_flash_sales(): void
+    {
+        $user = User::factory()->create(['role' => 'customer']);
+
+        $this->actingAs($user)->get(route('admin.flash-sales.index'))->assertForbidden();
+
+        $variant = $this->variant(100000);
+        $this->actingAs($user)
+            ->post(route('admin.flash-sales.store'), [
+                'name' => 'Sneaky Sale',
+                'starts_at' => now()->addDay()->format('Y-m-d H:i:s'),
+                'ends_at' => now()->addDays(2)->format('Y-m-d H:i:s'),
+                'is_active' => true,
+                'items' => [
+                    ['product_variant_id' => $variant->id, 'sale_price' => 60000, 'quota' => 10],
+                ],
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('flash_sales', ['name' => 'Sneaky Sale']);
+    }
+
+    public function test_duplicate_variant_in_same_sale_rejected(): void
+    {
+        $variant = $this->variant(100000);
+
+        $response = $this->actingAs($this->admin())
+            ->post(route('admin.flash-sales.store'), [
+                'name' => 'Flash Sale Duplikat',
+                'starts_at' => now()->addDay()->format('Y-m-d H:i:s'),
+                'ends_at' => now()->addDays(2)->format('Y-m-d H:i:s'),
+                'is_active' => true,
+                'items' => [
+                    ['product_variant_id' => $variant->id, 'sale_price' => 60000, 'quota' => 10],
+                    // Same variant submitted twice in one request -> must be a clean validation
+                    // error (distinct rule), never a raw QueryException/500 from the DB unique constraint.
+                    ['product_variant_id' => $variant->id, 'sale_price' => 70000, 'quota' => 5],
+                ],
+            ]);
+
+        $response->assertSessionHasErrors();
+        $this->assertDatabaseMissing('flash_sales', ['name' => 'Flash Sale Duplikat']);
+        $this->assertDatabaseMissing('flash_sale_items', ['product_variant_id' => $variant->id]);
+    }
+
+    public function test_cannot_remove_order_referenced_item_on_update(): void
+    {
+        $variant = $this->variant(100000);
+        $otherVariant = $this->variant(50000);
+
+        $sale = FlashSale::create([
+            'name' => 'Sale With Order',
+            'starts_at' => now()->addHour(),
+            'ends_at' => now()->addDays(2),
+            'is_active' => true,
+        ]);
+        $item = FlashSaleItem::create([
+            'flash_sale_id' => $sale->id,
+            'product_variant_id' => $variant->id,
+            'sale_price' => 60000,
+            'quota' => 10,
+            'sold_count' => 1,
+        ]);
+        $otherItem = FlashSaleItem::create([
+            'flash_sale_id' => $sale->id,
+            'product_variant_id' => $otherVariant->id,
+            'sale_price' => 30000,
+            'quota' => 10,
+            'sold_count' => 0,
+        ]);
+
+        $buyer = User::factory()->create(['role' => 'customer']);
+        $order = Order::create([
+            'order_number' => 'ORD-FLASH-REF',
+            'user_id' => $buyer->id,
+            'status' => 'paid',
+            'fulfillment_type' => 'delivery',
+            'subtotal' => 60000,
+            'shipping_cost' => 10000,
+            'discount_amount' => 0,
+            'total_amount' => 70000,
+            'payment_method' => 'qris',
+            'payment_status' => 'paid',
+        ]);
+        OrderItem::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $variant->id,
+            'flash_sale_item_id' => $item->id,
+            'product_name_snapshot' => 'P',
+            'variant_name_snapshot' => 'V',
+            'quantity' => 1,
+            'unit_price' => 60000,
+            'weight_gram' => 100,
+            'subtotal' => 60000,
+        ]);
+
+        // Submit an update that drops the order-referenced item from the payload, keeping
+        // only the unreferenced one.
+        $response = $this->actingAs($this->admin())
+            ->put(route('admin.flash-sales.update', $sale->id), [
+                'name' => 'Sale With Order',
+                'starts_at' => $sale->starts_at->format('Y-m-d H:i:s'),
+                'ends_at' => $sale->ends_at->format('Y-m-d H:i:s'),
+                'is_active' => true,
+                'items' => [
+                    ['id' => $otherItem->id, 'product_variant_id' => $otherVariant->id, 'sale_price' => 30000, 'quota' => 10],
+                ],
+            ]);
+
+        $response->assertSessionHasErrors('items');
+        $this->assertDatabaseHas('flash_sale_items', ['id' => $item->id, 'product_variant_id' => $variant->id]);
     }
 }
