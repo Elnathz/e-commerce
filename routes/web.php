@@ -126,6 +126,10 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     // Hero Slides & Site Settings
     Route::resource('hero-slides', \App\Http\Controllers\Admin\HeroSlideController::class)
         ->except(['show']);
+
+    // Flash Sale
+    Route::resource('flash-sales', \App\Http\Controllers\Admin\FlashSaleController::class)
+        ->except(['show']);
     Route::get('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'edit'])->name('settings.edit');
     Route::put('settings', [\App\Http\Controllers\Admin\SettingsController::class, 'update'])->name('settings.update');
 });
