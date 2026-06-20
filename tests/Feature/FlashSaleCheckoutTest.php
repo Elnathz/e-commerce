@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
-use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, FlashSale, FlashSaleItem, Order, OrderItem};
+use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, FlashSale, FlashSaleItem, Order, OrderItem, Promotion, PromotionUsage, ReturnRequest, ReturnRequestItem};
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -344,5 +345,273 @@ class FlashSaleCheckoutTest extends TestCase
 
         // Flash quota must stay UNCHANGED — a returned flash item is still "sold".
         $this->assertSame(2, $fsItem->fresh()->sold_count);
+    }
+
+    /**
+     * Fase 2 Task 10 (T6 flash, T7): the containsFlash gate (Fase 1 Task 2,
+     * wired in Fase 2 Task 5) must reject a voucher whose
+     * applies_to_flash_sale=false when the cart being placed contains a
+     * flash-sale item. The reserve() call happens INSIDE the placement
+     * transaction (CheckoutController::store()), so a rejected voucher must
+     * roll back the ENTIRE order placement — no Order/OrderItem leaked, flash
+     * sold_count not incremented, cart item untouched, session error set.
+     *
+     * Counter-case in the same test: the identical flash cart with a voucher
+     * that DOES opt in (applies_to_flash_sale=true) must succeed — proving
+     * the gate is flash-aware, not simply blocking all vouchers on flash carts.
+     */
+    public function test_voucher_blocked_on_flash_order_when_flag_off(): void
+    {
+        [$user, $item, $fsItem] = $this->setupCart(
+            price: 100000,
+            qty: 1,
+            salePrice: 60000,
+            quota: 10,
+            soldCount: 0,
+        );
+
+        // PromotionObserver::created() logs Auth::id() as admin_id (FK to users,
+        // NOT NULL) — authenticate before creating the Promotion fixtures.
+        Auth::login($user);
+        Promotion::create([
+            'code' => 'NOFLASH',
+            'name' => 'No Flash',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => false,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+            'consented_prices' => [$item->id => 60000],
+            'voucher_code' => 'NOFLASH',
+        ]);
+
+        $response->assertRedirect('/cart');
+        $response->assertSessionHas('error');
+
+        // Whole placement transaction rolled back — no order leaked.
+        $this->assertSame(0, Order::count());
+        $this->assertSame(0, OrderItem::count());
+
+        // Flash quota must NOT have been incremented — reserve() throws AFTER
+        // the flash sold_count increment in the same transaction, so the
+        // rollback must also undo it.
+        $this->assertSame(0, $fsItem->fresh()->sold_count);
+
+        // No promotion_usages row leaked for the rejected attempt.
+        $this->assertDatabaseCount('promotion_usages', 0);
+
+        // Cart item must survive untouched — it was never deleted.
+        $this->assertNotNull(CartItem::find($item->id));
+
+        // Counter-case: the SAME flash cart with a voucher that opts in
+        // (applies_to_flash_sale=true) must succeed.
+        Promotion::create([
+            'code' => 'FLASHOK',
+            'name' => 'Flash OK',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => true,
+        ]);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+            'consented_prices' => [$item->id => 60000],
+            'voucher_code' => 'FLASHOK',
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order, 'A flag-on voucher must be accepted on a flash-containing cart.');
+        $this->assertSame('FLASHOK', $order->voucher_code);
+
+        // subtotal = 60000 (flash effective price) * 1; discount = 10% = 6000.
+        $this->assertEqualsWithDelta(60000, $order->subtotal, 0.01);
+        $this->assertEqualsWithDelta(6000, $order->discount_amount, 0.01);
+        $this->assertEqualsWithDelta(54000, $order->total_amount, 0.01);
+
+        $this->assertDatabaseHas('promotion_usages', ['order_id' => $order->id, 'status' => 'reserved']);
+
+        // Flash quota now reserved by the successful placement.
+        $this->assertSame(1, $fsItem->fresh()->sold_count);
+    }
+
+    /**
+     * Fase 2 Task 10 (T6 flash, T7): combined flash + voucher proration.
+     * Cart has ONE flash item (unit_price = sale_price = 60000, qty 1) and
+     * ONE normal item (price = 100000, qty 1). A percentage voucher with
+     * applies_to_flash_sale=true is applied at checkout.
+     *
+     * subtotal      = 60000 + 100000 = 160000
+     * voucher 10%   -> discount_amount = 16000
+     * discount_ratio = 16000 / 160000 = 0.1
+     *
+     * After placement, the customer returns ONLY the flash item (qty 1).
+     * Refund must use the flash item's EFFECTIVE (sale) unit_price — proving
+     * Fase 1 Task 5's discount_amount/subtotal proration composes correctly
+     * with a flash-priced order_item — and shipping must NOT be refunded:
+     *   refund = unit_price * qty * (1 - ratio) = 60000 * 1 * 0.9 = 54000
+     */
+    public function test_voucher_allowed_and_prorated_with_flash(): void
+    {
+        $user = User::factory()->create();
+        $cat = Category::create(['name' => 'C', 'slug' => 'c-' . uniqid()]);
+
+        // --- Flash item: base price 100000, flash sale_price 60000 ---
+        $flashProduct = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Flash P',
+            'slug' => 'flash-p-' . uniqid(),
+            'description' => 'd',
+            'base_price' => 100000,
+            'weight_gram' => 100,
+            'is_active' => true,
+        ]);
+        $flashVariant = ProductVariant::create([
+            'product_id' => $flashProduct->id,
+            'sku' => 'fs-' . uniqid(),
+            'name' => 'V',
+            'price' => 100000,
+            'stock' => 10,
+            'reserved_stock' => 0,
+            'is_active' => true,
+        ]);
+        $sale = FlashSale::create([
+            'name' => 'FS',
+            'starts_at' => now()->subMinute(),
+            'ends_at' => now()->addHour(),
+            'is_active' => true,
+        ]);
+        $fsItem = FlashSaleItem::create([
+            'flash_sale_id' => $sale->id,
+            'product_variant_id' => $flashVariant->id,
+            'sale_price' => 60000,
+            'quota' => 10,
+            'sold_count' => 0,
+        ]);
+
+        // --- Normal item: price 100000 (no flash) ---
+        $normalProduct = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'Normal P',
+            'slug' => 'normal-p-' . uniqid(),
+            'description' => 'd',
+            'base_price' => 100000,
+            'weight_gram' => 100,
+            'is_active' => true,
+        ]);
+        $normalVariant = ProductVariant::create([
+            'product_id' => $normalProduct->id,
+            'sku' => 'n-' . uniqid(),
+            'name' => 'V',
+            'price' => 100000,
+            'stock' => 10,
+            'reserved_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $cart = Cart::create(['user_id' => $user->id]);
+        $flashCartItem = CartItem::create([
+            'cart_id' => $cart->id,
+            'product_variant_id' => $flashVariant->id,
+            'quantity' => 1,
+            'unit_price_snapshot' => 60000,
+        ]);
+        $normalCartItem = CartItem::create([
+            'cart_id' => $cart->id,
+            'product_variant_id' => $normalVariant->id,
+            'quantity' => 1,
+            'unit_price_snapshot' => 100000,
+        ]);
+
+        Auth::login($user);
+        Promotion::create([
+            'code' => 'FLASH10',
+            'name' => 'Flash 10',
+            'type' => 'percentage',
+            'value' => 10,
+            'min_purchase' => 0,
+            'is_active' => true,
+            'applies_to_flash_sale' => true,
+        ]);
+
+        $itemIds = $flashCartItem->id . ',' . $normalCartItem->id;
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => $itemIds,
+            'consented_prices' => [
+                $flashCartItem->id => 60000,
+                $normalCartItem->id => 100000,
+            ],
+            'voucher_code' => 'FLASH10',
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+
+        // subtotal = 60000 (flash effective) + 100000 (normal) = 160000.
+        $this->assertEqualsWithDelta(160000, $order->subtotal, 0.01);
+        // discount = 10% of 160000 = 16000.
+        $this->assertEqualsWithDelta(16000, $order->discount_amount, 0.01);
+        $this->assertSame('FLASH10', $order->voucher_code);
+
+        $flashOrderItem = OrderItem::where('flash_sale_item_id', $fsItem->id)->first();
+        $this->assertNotNull($flashOrderItem);
+        $this->assertEqualsWithDelta(60000, $flashOrderItem->unit_price, 0.01);
+
+        // Mark the order completed so the return route's eligibility window passes.
+        $order->update(['status' => 'completed', 'completed_at' => now()]);
+
+        Storage::fake('public');
+
+        $response = $this->actingAs($user)->post(route('returns.store', $order->order_number), [
+            'reason' => 'Defective product',
+            'items' => [
+                [
+                    'order_item_id' => $flashOrderItem->id,
+                    'quantity' => 1,
+                    'reason_code' => 'defective',
+                    'condition' => 'opened',
+                ],
+            ],
+            'images' => [
+                UploadedFile::fake()->image('evidence.jpg'),
+            ],
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $returnRequest = ReturnRequest::first();
+        $this->assertNotNull($returnRequest);
+
+        // Drive the SAME proration formula the admin Return show page uses
+        // (Admin\ReturnController::calculateProratedRefund): discount_ratio =
+        // discount_amount / subtotal = 16000 / 160000 = 0.1.
+        $discountRatio = $order->discount_amount / $order->subtotal;
+        $this->assertEqualsWithDelta(0.1, $discountRatio, 0.0001);
+
+        $itemSubtotal = 1 * $flashOrderItem->unit_price; // qty * effective(sale) unit_price = 60000
+        $expectedRefund = round($itemSubtotal * (1 - $discountRatio), 2); // 60000 * 0.9 = 54000
+        $this->assertEqualsWithDelta(54000, $expectedRefund, 0.01);
+
+        $refund = app(\App\Http\Controllers\Admin\ReturnController::class)
+            ->calculateProratedRefund($order, $itemSubtotal);
+        $this->assertEqualsWithDelta(54000, $refund, 0.01);
+
+        // Confirm the same value surfaces through the real admin Show endpoint.
+        $admin = User::factory()->create(['role' => 'admin']);
+        $showResponse = $this->actingAs($admin)->get(route('admin.returns.show', $returnRequest->id));
+        $showResponse->assertStatus(200);
+        $items = $showResponse->viewData('page')['props']['returnRequest']['items'];
+        $this->assertCount(1, $items);
+        $this->assertEquals(54000, $items[0]['suggested_refund']);
+
+        // Shipping is never part of the refund formula (pickup order, shipping_cost = 0 anyway).
+        $this->assertEqualsWithDelta(0, $order->shipping_cost, 0.01);
     }
 }
