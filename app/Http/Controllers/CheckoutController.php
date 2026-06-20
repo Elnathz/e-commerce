@@ -379,13 +379,16 @@ class CheckoutController extends Controller
                     'status' => 'failed',
                 ]);
 
-                // Update order, store procedure 
+                // Update order, store procedure
                 $order->update([
                     'status' => 'cancelled',
                     'payment_status' => 'failed',
                     'cancelled_at' => now(),
                     'cancelled_reason' => 'Dibatalkan oleh customer',
                 ]);
+
+                // Release reserved promotion quota (FR030)
+                app(\App\Services\PromotionService::class)->release($order->id);
             });
 
             return redirect()->route('home')->with('success', 'Pesanan berhasil dibatalkan.');

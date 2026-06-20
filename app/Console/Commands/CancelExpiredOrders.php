@@ -77,6 +77,9 @@ class CancelExpiredOrders extends Command
                     foreach ($order->items as $item) {
                         $item->productVariant?->increment('stock', $item->quantity);
                     }
+
+                    // Release reserved promotion quota (FR030)
+                    app(\App\Services\PromotionService::class)->release($lockedOrder->id);
                 });
 
                 $cancelledCount++;
