@@ -363,6 +363,9 @@ class PaymentController extends Controller
             // Sprint 9: Release Promotion Usage (Phase 2B)
             app(\App\Services\PromotionService::class)->release($order->id);
 
+            // Fase 2 Task 6: Release reserved flash sale quota
+            app(\App\Services\FlashSaleService::class)->release($order);
+
             Log::info('Payment failed/expired: stock released, order cancelled', [
                 'order_number' => $order->order_number,
                 'reason' => $status,

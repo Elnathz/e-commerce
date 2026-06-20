@@ -441,6 +441,9 @@ class CheckoutController extends Controller
 
                 // Release reserved promotion quota (FR030)
                 app(\App\Services\PromotionService::class)->release($order->id);
+
+                // Release reserved flash sale quota (Fase 2 Task 6)
+                app(\App\Services\FlashSaleService::class)->release($order);
             });
 
             return redirect()->route('home')->with('success', 'Pesanan berhasil dibatalkan.');

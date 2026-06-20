@@ -4,6 +4,8 @@ namespace Tests\Feature;
 
 use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, FlashSale, FlashSaleItem, Order, OrderItem};
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class FlashSaleCheckoutTest extends TestCase
@@ -205,5 +207,142 @@ class FlashSaleCheckoutTest extends TestCase
         $this->assertSame(0, $fsItem->fresh()->sold_count);
 
         $this->assertNotNull(CartItem::find($item->id));
+    }
+
+    /**
+     * Fase 2 Task 6 (T9): cancelling a pending order that holds a flash-sale
+     * item must release the reserved flash quota — mirroring the Fase 1
+     * fix for PromotionService::release() (test_voucher_released_on_customer_cancel).
+     * Drives the REAL customer cancel route (orders.cancel), not the
+     * service directly, so the test proves FlashSaleService::release() is
+     * actually wired into CheckoutController::cancel().
+     */
+    public function test_cancel_releases_flash_quota(): void
+    {
+        [$user, $item, $fsItem] = $this->setupCart(
+            price: 100000,
+            qty: 2,
+            salePrice: 60000,
+            quota: 10,
+            soldCount: 0,
+        );
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+            'consented_prices' => [$item->id => 60000],
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertNotNull($order);
+        $this->assertSame('pending', $order->status);
+
+        // Quota reserved by placement.
+        $this->assertSame(2, $fsItem->fresh()->sold_count);
+
+        $this->actingAs($user)
+            ->post(route('orders.cancel', $order->order_number))
+            ->assertRedirect(route('home'));
+
+        $order->refresh();
+        $this->assertSame('cancelled', $order->status);
+        $this->assertSame('failed', $order->payment_status);
+
+        // Flash quota restored — the financial fix this task wires in.
+        $this->assertSame(0, $fsItem->fresh()->sold_count);
+    }
+
+    /**
+     * Fase 2 Task 6 (T10): a return for a flash-sale item must NOT restore
+     * the flash quota — a returned flash item stays "sold" against the
+     * flash allocation. Builds a PAID/completed order with a flash-linked
+     * order item (following ReturnRequestTest's setUp pattern) and drives
+     * the REAL customer return submission route (returns.store).
+     */
+    public function test_return_does_not_restore_flash_quota(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+        $cat = Category::create(['name' => 'C', 'slug' => 'c-' . uniqid()]);
+        $product = Product::create([
+            'category_id' => $cat->id,
+            'name' => 'P',
+            'slug' => 'p-' . uniqid(),
+            'description' => 'd',
+            'base_price' => 100000,
+            'weight_gram' => 100,
+            'is_active' => true,
+        ]);
+        $variant = ProductVariant::create([
+            'product_id' => $product->id,
+            'sku' => 's-' . uniqid(),
+            'name' => 'V',
+            'price' => 100000,
+            'stock' => 10,
+            'reserved_stock' => 0,
+            'is_active' => true,
+        ]);
+
+        $sale = FlashSale::create([
+            'name' => 'FS',
+            'starts_at' => now()->subHour(),
+            'ends_at' => now()->addHour(),
+            'is_active' => true,
+        ]);
+        $fsItem = FlashSaleItem::create([
+            'flash_sale_id' => $sale->id,
+            'product_variant_id' => $variant->id,
+            'sale_price' => 60000,
+            'quota' => 10,
+            'sold_count' => 2, // 2 units already "sold" under flash pricing
+        ]);
+
+        $order = Order::create([
+            'order_number' => 'ORD-FLASH-RET-1',
+            'user_id' => $user->id,
+            'status' => 'completed',
+            'completed_at' => now(),
+            'fulfillment_type' => 'delivery',
+            'subtotal' => 120000,
+            'shipping_cost' => 10000,
+            'discount_amount' => 0,
+            'total_amount' => 130000,
+            'payment_method' => 'qris',
+            'payment_status' => 'paid',
+        ]);
+
+        $orderItem = OrderItem::create([
+            'order_id' => $order->id,
+            'product_variant_id' => $variant->id,
+            'flash_sale_item_id' => $fsItem->id,
+            'product_name_snapshot' => $product->name,
+            'variant_name_snapshot' => $variant->name,
+            'quantity' => 2,
+            'unit_price' => 60000,
+            'weight_gram' => 100,
+            'subtotal' => 120000,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('returns.store', $order->order_number), [
+            'reason' => 'Defective product',
+            'items' => [
+                [
+                    'order_item_id' => $orderItem->id,
+                    'quantity' => 2,
+                    'reason_code' => 'defective',
+                    'condition' => 'opened',
+                ],
+            ],
+            'images' => [
+                UploadedFile::fake()->image('evidence.jpg'),
+            ],
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertSame(1, \App\Models\ReturnRequest::count());
+
+        // Flash quota must stay UNCHANGED — a returned flash item is still "sold".
+        $this->assertSame(2, $fsItem->fresh()->sold_count);
     }
 }

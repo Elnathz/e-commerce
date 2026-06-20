@@ -80,6 +80,9 @@ class CancelExpiredOrders extends Command
 
                     // Release reserved promotion quota (FR030)
                     app(\App\Services\PromotionService::class)->release($lockedOrder->id);
+
+                    // Release reserved flash sale quota (Fase 2 Task 6)
+                    app(\App\Services\FlashSaleService::class)->release($lockedOrder);
                 });
 
                 $cancelledCount++;
