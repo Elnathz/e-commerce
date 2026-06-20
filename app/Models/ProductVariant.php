@@ -29,6 +29,17 @@ class ProductVariant extends Model
         return $this->hasMany(ProductImage::class, 'product_variant_id');
     }
 
+    /**
+     * Flash-sale line items for this variant. Eager-load together with
+     * `flashSaleItems.flashSale` so PricingService::activeFlashItem() can
+     * resolve the active flash price in-memory instead of issuing one query
+     * per variant (avoids the storefront N+1 on listing pages).
+     */
+    public function flashSaleItems()
+    {
+        return $this->hasMany(FlashSaleItem::class, 'product_variant_id');
+    }
+
     public function priceInfo(): array
     {
         return app(\App\Services\PricingService::class)->priceInfo($this);

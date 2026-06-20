@@ -42,6 +42,7 @@ class StorefrontController extends Controller
               ->sortByDesc('product_count')->take(10)->values();
 
         $products = \App\Models\Product::with(['category', 'variants' => fn ($q) => $q->where('is_active', true),
+            'variants.flashSaleItems.flashSale',
             'images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order')])
             ->where('is_active', true)->inRandomOrder()->take(12)->get();
         $products->each->setAppends(['price_display']);
@@ -101,6 +102,7 @@ class StorefrontController extends Controller
         $products = Product::with([
                 'category',
                 'variants' => fn ($q) => $q->where('is_active', true),
+                'variants.flashSaleItems.flashSale',
                 'images' => fn ($q) => $q->orderBy('is_primary', 'desc')->orderBy('sort_order'),
             ])
             ->whereIn('id', array_keys($byProduct))
@@ -156,6 +158,7 @@ class StorefrontController extends Controller
             'variants' => function($q) {
                 $q->where('is_active', true)->orderBy('price', 'asc');
             },
+            'variants.flashSaleItems.flashSale',
             'variants.images',
             'images' => function($q) {
                 $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
@@ -177,7 +180,7 @@ class StorefrontController extends Controller
         // Related products from the same category
         $relatedProducts = Product::with(['variants' => function($q) {
             $q->where('is_active', true);
-        }, 'images' => function($q) {
+        }, 'variants.flashSaleItems.flashSale', 'images' => function($q) {
             $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
         }])
         ->where('category_id', $product->category_id)
@@ -197,7 +200,7 @@ class StorefrontController extends Controller
     {
         $query = Product::with(['category', 'variants' => function($q) {
             $q->where('is_active', true);
-        }, 'images' => function($q) {
+        }, 'variants.flashSaleItems.flashSale', 'images' => function($q) {
             $q->orderBy('is_primary', 'desc')->orderBy('sort_order');
         }])->where('is_active', true);
 

@@ -59,6 +59,20 @@ class PricingService {
     }
 
     public function activeFlashItem(ProductVariant $v, Carbon $at): ?FlashSaleItem {
+        // Fast path: when the caller eager-loaded `flashSaleItems.flashSale`
+        // (storefront listings do), resolve the active item in-memory — no
+        // per-variant query. Mirrors FlashSale::scopeActiveAt exactly:
+        // is_active AND starts_at <= $at AND ends_at > $at.
+        if ($v->relationLoaded('flashSaleItems')) {
+            return $v->flashSaleItems->first(function (FlashSaleItem $item) use ($at) {
+                $fs = $item->flashSale;
+                return $fs
+                    && $fs->is_active
+                    && $fs->starts_at !== null && $fs->starts_at->lte($at)
+                    && $fs->ends_at !== null && $fs->ends_at->gt($at);
+            });
+        }
+
         return FlashSaleItem::where('product_variant_id', $v->id)
             ->whereHas('flashSale', fn ($q) => $q->activeAt($at))
             ->with('flashSale')->first();

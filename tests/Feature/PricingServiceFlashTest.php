@@ -3,6 +3,7 @@ namespace Tests\Feature;
 use App\Models\{Category, Product, ProductVariant, FlashSale, FlashSaleItem};
 use App\Services\PricingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class PricingServiceFlashTest extends TestCase {
@@ -38,5 +39,36 @@ class PricingServiceFlashTest extends TestCase {
         $this->assertSame('none', $info['source']);
         $this->assertSame('sold_out', $info['flash_status']);
         $this->assertEqualsWithDelta(100000, $info['effective'], 0.01);
+    }
+
+    // --- N+1 fast path: when `flashSaleItems.flashSale` is eager-loaded the
+    //     active flash item resolves in-memory (no per-variant query). ---
+
+    public function test_eager_loaded_flash_resolves_without_query(): void {
+        $v = $this->variant(100000); $this->flash($v, 60000, -10, 10);
+        $loaded = ProductVariant::with('flashSaleItems.flashSale')->find($v->id);
+
+        DB::connection()->enableQueryLog();
+        $item = app(PricingService::class)->activeFlashItem($loaded, now());
+        $queries = DB::connection()->getQueryLog();
+        DB::connection()->disableQueryLog();
+
+        $this->assertNotNull($item, 'Active flash item must resolve from the eager-loaded relation.');
+        $this->assertCount(0, $queries, 'No per-variant flash query when flashSaleItems is eager-loaded.');
+    }
+
+    public function test_eager_loaded_path_resolves_same_flash_price(): void {
+        $v = $this->variant(100000); $this->flash($v, 60000, -10, 10);
+        $loaded = ProductVariant::with('flashSaleItems.flashSale')->find($v->id);
+        $info = app(PricingService::class)->priceInfo($loaded);
+        $this->assertSame('flash', $info['source']);
+        $this->assertEqualsWithDelta(60000, $info['effective'], 0.01);
+    }
+
+    public function test_eager_loaded_out_of_window_flash_excluded(): void {
+        // In-memory activeAt replication must exclude a not-yet-started window.
+        $v = $this->variant(100000); $this->flash($v, 60000, 10, 20);
+        $loaded = ProductVariant::with('flashSaleItems.flashSale')->find($v->id);
+        $this->assertNull(app(PricingService::class)->activeFlashItem($loaded, now()));
     }
 }
