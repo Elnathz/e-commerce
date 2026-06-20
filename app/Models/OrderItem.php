@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class OrderItem extends Model
 {
     protected $fillable = [
-        'order_id', 'product_variant_id', 'product_name_snapshot',
+        'order_id', 'product_variant_id', 'flash_sale_item_id', 'product_name_snapshot',
         'variant_name_snapshot', 'quantity', 'unit_price', 'weight_gram', 'subtotal'
     ];
 
@@ -19,6 +19,11 @@ class OrderItem extends Model
     public function productVariant()
     {
         return $this->belongsTo(ProductVariant::class);
+    }
+
+    public function flashSaleItem()
+    {
+        return $this->belongsTo(FlashSaleItem::class);
     }
 
     public function review()
