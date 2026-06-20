@@ -46,6 +46,12 @@ class AutoCancelStaleOrders extends Command
                     }
                 }
 
+                // FR030: Voucher quota is intentionally NOT released here. These orders
+                // are already paid/processing, so their promotion_usages are 'confirmed'
+                // (a counted terminal state — the voucher was genuinely redeemed). The
+                // refund flow handles the financial reversal; the quota stays consumed.
+                // Do NOT add release() (it no-ops on non-'reserved' usages) or a manual
+                // used_count decrement here.
                 $order->update([
                     'status' => 'cancelled',
                     'cancelled_at' => now(),
