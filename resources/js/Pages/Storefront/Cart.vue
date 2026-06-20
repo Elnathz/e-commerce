@@ -14,6 +14,11 @@ const props = defineProps({
 
 const selectedItems = ref(props.cartItems.map(item => item.id));
 
+// Light voucher field (TDD line 999): just carries the typed code forward to
+// checkout via query param. No shipping-aware validation here — full
+// validation happens on the Checkout page (Task 7).
+const voucherCode = ref('');
+
 onMounted(() => {
     const params = new URLSearchParams(window.location.search);
     const directCheckoutItem = params.get('direct_checkout_item');
@@ -38,10 +43,17 @@ const openShoppingMethod = () => {
 };
 
 const handleProceed = (method) => {
-    router.get(route('checkout.index'), {
+    const params = {
         method: method,
         items: selectedItems.value.join(',')
-    });
+    };
+
+    const trimmedVoucher = voucherCode.value.trim();
+    if (trimmedVoucher) {
+        params.voucher = trimmedVoucher.toUpperCase();
+    }
+
+    router.get(route('checkout.index'), params);
 };
 
 
@@ -190,6 +202,19 @@ const removeItem = (itemId) => {
                             <span class="text-gray-500">Total Harga ({{ totalQuantity }} barang)</span>
                             <span class="font-semibold text-gray-900">{{ formatPrice(subtotal) }}</span>
                         </div>
+                    </div>
+
+                    <!-- Light voucher field: carried forward to checkout, validated there -->
+                    <div class="border-t border-gray-200 pt-4">
+                        <label for="cart-voucher-code" class="block text-sm font-semibold text-gray-700 mb-1.5">Punya kode voucher?</label>
+                        <input
+                            id="cart-voucher-code"
+                            v-model="voucherCode"
+                            type="text"
+                            placeholder="Masukkan kode voucher"
+                            class="w-full px-4 py-2.5 rounded-xl bg-white border-none ring-1 ring-gray-200 focus:ring-2 focus:ring-blue-600 transition-all font-medium text-gray-900 text-sm uppercase"
+                        >
+                        <p class="text-xs text-gray-400 mt-1.5">Kode akan diperiksa di langkah pembayaran.</p>
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">

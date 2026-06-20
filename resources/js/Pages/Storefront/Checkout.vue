@@ -12,7 +12,8 @@ const props = defineProps({
     subtotal: Number,
     totalWeight: Number,
     rajaongkirKeyExists: Boolean,
-    itemIds: String
+    itemIds: String,
+    initialVoucher: { type: String, default: null }
 });
 
 // State
@@ -27,7 +28,9 @@ const isPlacingOrder = ref(false);
 const orderError = ref('');
 
 // Voucher state
-const voucherInput = ref('');
+// Pre-filled when the customer typed a code on the Cart page (Task 8) and it
+// was carried forward via the `?voucher=` query param.
+const voucherInput = ref(props.initialVoucher || '');
 const isValidatingVoucher = ref(false);
 const voucherMessage = ref('');
 const voucherMessageType = ref(''); // 'success' | 'error'
@@ -88,11 +91,18 @@ const outOfStockItems = computed(() => {
 const hasStockIssue = computed(() => outOfStockItems.value.length > 0);
 
 // Initialize
-onMounted(() => {
+onMounted(async () => {
     if (props.method === 'delivery' && selectedAddress.value) {
         selectedAddressId.value = selectedAddress.value.id;
         form.address_id = selectedAddress.value.id;
-        calculateShipping();
+        await calculateShipping();
+    }
+
+    // Auto-apply the voucher code carried forward from Cart (Task 8) once
+    // shipping cost (if any) is known, so courier-scoped vouchers (e.g.
+    // free_shipping) validate against the correct context on first load.
+    if (props.initialVoucher) {
+        applyVoucher();
     }
 });
 

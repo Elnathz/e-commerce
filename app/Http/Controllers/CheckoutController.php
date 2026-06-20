@@ -24,6 +24,10 @@ class CheckoutController extends Controller
     {
         $method = $request->query('method', 'delivery');
         $itemIds = $request->query('items'); // comma-separated
+        // Voucher code carried forward from the Cart page's light voucher field
+        // (Task 8 / TDD line 999). Not validated here — Checkout.vue pre-fills
+        // and triggers the existing validateVoucher() flow on mount.
+        $voucherCode = $request->query('voucher');
 
         if (!in_array($method, ['delivery', 'pickup'])) {
             return redirect('/cart')->with('error', 'Metode pengiriman tidak valid.');
@@ -101,7 +105,8 @@ class CheckoutController extends Controller
             'subtotal' => $subtotal,
             'totalWeight' => $totalWeight,
             'rajaongkirKeyExists' => !empty(config('services.rajaongkir.key')),
-            'itemIds' => $itemIds
+            'itemIds' => $itemIds,
+            'initialVoucher' => $voucherCode ? strtoupper($voucherCode) : null,
         ]);
     }
 
