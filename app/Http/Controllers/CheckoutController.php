@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -413,9 +414,11 @@ class CheckoutController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($order) {
-                // Lock the order row
-                $order = Order::where('id', $order->id)->lockForUpdate()->first();
+            $cancelled = DB::transaction(function () use ($order) {
+                // Lock the order row (eager-load items so the stock-release loop
+                // below does not lazy-load them again — the pre-lock instance is
+                // discarded here).
+                $order = Order::with('items')->where('id', $order->id)->lockForUpdate()->first();
 
                 // Re-check under the lock: the pre-lock canBeCancelled() check above
                 // can be stale under concurrent requests (e.g. two near-simultaneous
@@ -425,8 +428,10 @@ class CheckoutController extends Controller
                 // Mirrors the re-check already done in CancelExpiredOrders and
                 // PaymentController's payment-failure path.
                 if ($order->status !== 'pending' || $order->payment_status === 'paid') {
-                    return;
+                    return false;
                 }
+
+                $fromStatus = $order->status;
 
                 // Release reserved stock
                 foreach ($order->items as $item) {
@@ -442,7 +447,6 @@ class CheckoutController extends Controller
                     'status' => 'failed',
                 ]);
 
-                // Update order, store procedure
                 $order->update([
                     'status' => 'cancelled',
                     'payment_status' => 'failed',
@@ -450,16 +454,33 @@ class CheckoutController extends Controller
                     'cancelled_reason' => 'Dibatalkan oleh customer',
                 ]);
 
+                // Record the state transition so the cancellation reaches the
+                // Activity Log — mirrors every other order transition
+                // (PaymentController, Admin/OrderController, reconcile commands).
+                // The listener only writes activity_logs; no customer notification.
+                event(new \App\Events\OrderStatusChanged($order, $fromStatus, 'cancelled'));
+
                 // Release reserved promotion quota (FR030)
                 app(\App\Services\PromotionService::class)->release($order->id);
 
                 // Release reserved flash sale quota (Fase 2 Task 6)
                 app(\App\Services\FlashSaleService::class)->release($order);
+
+                return true;
             });
 
+            if (!$cancelled) {
+                return back()->with('error', 'Pesanan ini tidak dapat dibatalkan.');
+            }
+
             return redirect()->route('home')->with('success', 'Pesanan berhasil dibatalkan.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Gagal membatalkan pesanan: ' . $e->getMessage());
+        } catch (\Throwable $e) {
+            Log::error('Gagal membatalkan pesanan', [
+                'order_number' => $order->order_number,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Gagal membatalkan pesanan. Silakan coba lagi.');
         }
     }
 

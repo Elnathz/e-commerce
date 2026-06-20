@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, FlashSale, FlashSaleItem, Order, OrderItem, Promotion, PromotionUsage, ReturnRequest, ReturnRequestItem};
+use App\Models\{User, Category, Product, ProductVariant, Cart, CartItem, FlashSale, FlashSaleItem, Order, OrderItem, Promotion, PromotionUsage, ReturnRequest, ReturnRequestItem, ActivityLog};
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Auth;
@@ -251,6 +251,36 @@ class FlashSaleCheckoutTest extends TestCase
 
         // Flash quota restored — the financial fix this task wires in.
         $this->assertSame(0, $fsItem->fresh()->sold_count);
+    }
+
+    /**
+     * Tech-debt fix (checkout_cancel_hardening_plan #2): a customer cancel
+     * must dispatch OrderStatusChanged so the cancellation reaches the
+     * Activity Log — previously it used a raw update and was invisible there,
+     * inconsistent with every other order transition.
+     */
+    public function test_customer_cancel_is_recorded_in_activity_log(): void
+    {
+        [$user, $item] = $this->setupCart(price: 100000, qty: 1);
+
+        $this->actingAs($user)->post(route('checkout.store'), [
+            'method' => 'pickup',
+            'item_ids' => (string) $item->id,
+        ])->assertRedirect();
+
+        $order = Order::first();
+        $this->assertSame('pending', $order->status);
+
+        $this->actingAs($user)
+            ->post(route('orders.cancel', $order->order_number))
+            ->assertRedirect(route('home'));
+
+        $this->assertDatabaseHas('activity_logs', [
+            'type' => 'order.cancelled',
+            'subject_type' => 'order',
+            'subject_id' => $order->id,
+            'subject_label' => $order->order_number,
+        ]);
     }
 
     /**
