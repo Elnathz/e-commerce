@@ -43,11 +43,7 @@ class FlashSaleController extends Controller
     {
         $data = $this->validateData($request);
 
-        try {
-            $this->guardItems($data['items'], null);
-        } catch (ValidationException $e) {
-            throw $e;
-        }
+        $this->guardItems($data['items'], $data['starts_at'], $data['ends_at'], null);
 
         $sale = FlashSale::create([
             'name' => $data['name'],
@@ -82,7 +78,7 @@ class FlashSaleController extends Controller
     {
         $data = $this->validateData($request);
 
-        $this->guardItems($data['items'], $flashSale);
+        $this->guardItems($data['items'], $data['starts_at'], $data['ends_at'], $flashSale);
         $this->guardActiveEdit($flashSale, $data);
 
         $flashSale->update([
@@ -204,10 +200,9 @@ class FlashSaleController extends Controller
      * Both guard failures are converted to ValidationException so the admin
      * sees a normal form error instead of a 500.
      */
-    private function guardItems(array $items, ?FlashSale $excluding): void
+    private function guardItems(array $items, string $startsAt, string $endsAt, ?FlashSale $excluding): void
     {
         $service = app(FlashSaleService::class);
-        $sale = $excluding; // for window comparison when editing
 
         foreach ($items as $index => $item) {
             $variant = \App\Models\ProductVariant::with('product')->find($item['product_variant_id']);
@@ -223,22 +218,18 @@ class FlashSaleController extends Controller
                 ]);
             }
 
-            $this->guardOverlap($item, $index, $excluding);
+            $this->guardOverlap($item, $index, $startsAt, $endsAt, $excluding);
         }
     }
 
-    private function guardOverlap(array $item, int $index, ?FlashSale $excluding): void
+    /**
+     * Reject if the variant is already in another flash_sale_item whose
+     * flash_sale window overlaps [$startsAt, $endsAt) AND is active. The
+     * sale currently being edited is excluded from the comparison (its own
+     * items don't conflict with themselves).
+     */
+    private function guardOverlap(array $item, int $index, string $startsAt, string $endsAt, ?FlashSale $excluding): void
     {
-        // Determine the window to compare against: the sale being edited (if any)
-        // uses request data already merged by caller; for create, we need starts/ends
-        // from the request — but guardItems doesn't have them here, so re-derive from
-        // the currently validated request via request() helper is unreliable in unit
-        // calls. Instead this method receives the sale window via the caller's $data
-        // through the excluding sale itself for edit, and for create the window is
-        // passed by the caller using request() input directly below.
-        $startsAt = request('starts_at');
-        $endsAt = request('ends_at');
-
         $query = FlashSaleItem::where('product_variant_id', $item['product_variant_id'])
             ->whereHas('flashSale', function ($q) use ($startsAt, $endsAt, $excluding) {
                 $q->where('is_active', true)
